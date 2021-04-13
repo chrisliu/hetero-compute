@@ -1,3 +1,6 @@
 [submodule "deps/pcg-cpp"]
 	path = deps/pcg-cpp
 	url = https://github.com/imneme/pcg-cpp.git
+[submodule "deps/gapbs"]
+	path = deps/gapbs
+	url = https://github.com/sbeamer/gapbs.git
