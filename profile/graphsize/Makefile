@@ -1,5 +1,5 @@
-CP_COMPILER = g++-10
-CPP_FLAGS    = --std=c++11
+CPP_COMPILER = g++-10
+CPP_FLAGS    = --std=c++11 -fopenmp
 CXX          = $(CPP_COMPILER) $(CPP_FLAGS)
 
 # Name of profiler.
@@ -9,7 +9,7 @@ PROF_NAME    = graphsize
 all: graphsize.exe
 
 graphsize.exe: graphsize.cpp
-	$(CXX) --std=c++11 -fopenmp graphsize.cpp -o graphsize.exe
+	$(CXX) graphsize.cpp -o graphsize.exe
 
 .PHONY: test
 test: graphsize.exe
