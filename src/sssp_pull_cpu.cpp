@@ -29,14 +29,12 @@ void kernel_sssp_pull(wgraph_t &g, int *prop_dist, int *tmp_dist, int tid,
 #endif // DEBUG_ON
 
     // While changes still need to be propagated.
-    while (true) {
+    while (num_changed != 0) {
         #pragma omp barrier
-        
-        if (num_changed == 0) { break; }
 
-        #pragma omp barrier
         // Reset.
-        if (tid == 0) { 
+        #pragma omp single 
+        { 
 #ifdef DEBUG_ON
             std::cout << "  - num_changed: " << num_changed << std::endl;
 #endif // DEBUG_ON
@@ -70,6 +68,8 @@ void kernel_sssp_pull(wgraph_t &g, int *prop_dist, int *tmp_dist, int tid,
                 prop_dist[nid] = tmp_dist[nid];
             }
         }
+
+        #pragma omp barrier
     }
 }
 
