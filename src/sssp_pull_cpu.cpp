@@ -32,23 +32,8 @@ void kernel_sssp_pull(wgraph_t &g, int *prop_dist, int *tmp_dist, int tid,
     while (num_changed != 0) {
         #pragma omp barrier
 
-        // Reset.
-        #pragma omp single 
-        { 
-#ifdef DEBUG_ON
-            std::cout << "  - num_changed: " << num_changed << std::endl;
-#endif // DEBUG_ON
-            num_changed = 0; 
-#ifdef DEBUG_ON // DEBUG_ON
-            std::cout << "iteration: " << iters << std::endl;            
-            iters++;
-#endif // END DEBUG_ON
-        }
-
         // Propagate and reduce.
         for (int nid = tid; nid < g.num_nodes(); nid += num_threads) {
-            weight_t cur_dist = prop_dist[nid];
-
             for (wnode_t wnode : g.in_neigh(nid)) {
                 if (prop_dist[wnode.v] != MAX_WEIGHT) { 
                     weight_t new_dist = prop_dist[wnode.v] + wnode.w;
@@ -57,7 +42,18 @@ void kernel_sssp_pull(wgraph_t &g, int *prop_dist, int *tmp_dist, int tid,
             }
         }
 
-        #pragma omp barrier
+        // Reset.
+        #pragma omp single 
+        { 
+#ifdef DEBUG_ON
+            std::cout << "  - num_changed: " << num_changed << std::endl;
+            std::cout << "iteration: " << iters << std::endl;            
+            iters++;
+#endif // END DEBUG_ON
+            num_changed = 0; 
+        }
+
+        // NOTE: Implicit OMP BARRIER here (see OMP SINGLE).
 
         // Apply phase.
         for (int nid = tid; nid < g.num_nodes(); nid += num_threads) {
@@ -92,7 +88,6 @@ void sssp_pull(wgraph_t &g, int **ret_dist) {
     std::cout << "Starting kernel." << std::endl;
     timer.Start();
 
-    //omp_set_num_threads(4);
     #pragma omp parallel
     {
 #ifndef PROFILE_ON // !PROFILE_ON
@@ -126,9 +121,9 @@ int main(int argc, char *argv[]) {
 
     if (cli.scale() <= 4) {
         std::cout << "node: distance" << std::endl;
-        for (int i = 0; i < g.num_nodes(); i++)
+        for (int i = 0; i < ordered_g.num_nodes(); i++)
             std::cout << i << ": " << distances[i] << std::endl;
     }
-    
+
     return EXIT_SUCCESS;
 }
