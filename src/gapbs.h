@@ -1,8 +1,12 @@
+#ifndef GAPBS_H
+#define GAPBS_H
+
 /**
  * Include files from Scott's benchmark.
  */
 
 #include <cstdint>
+#include <limits>
 
 #include "../deps/gapbs/src/builder.h"
 #include "../deps/gapbs/src/command_line.h"
@@ -17,3 +21,7 @@ using wgraph_t = CSRGraph<nid_t, wnode_t>;
 
 using WeightedBuilder = BuilderBase<nid_t, wnode_t, weight_t>;
 using WeightedWriter = WriterBase<nid_t, wnode_t>; 
+
+const weight_t MAX_WEIGHT = std::numeric_limits<weight_t>::max();
+
+#endif // GAPBS_H
