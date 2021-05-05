@@ -71,69 +71,6 @@ void kernel_sssp_pull(wgraph_t &g, int *prop_dist, int *tmp_dist, int tid,
             }
         }
     }
-
-    //// While changes still need to be propagated.
-    //#pragma omp barrier
-    //do {
-        //// Reset.
-        //if (tid == 0) { 
-//#ifdef DEBUG_ON
-            //std::cout << "  - num_changed: " << num_changed << std::endl;
-//#endif // DEBUG_ON
-            //num_changed = 0; 
-//#ifdef DEBUG_ON // DEBUG_ON
-            //std::cout << "iteration: " << iters << std::endl;            
-            //iters++;
-//#endif // END DEBUG_ON
-        //}
-
-        //// Propagate and reduce.
-        //for (int nid = tid; nid < g.num_nodes(); nid += num_threads) {
-            //weight_t cur_dist = prop_dist[nid];
-
-            //for (wnode_t wnode : g.in_neigh(nid)) {
-                //if (prop_dist[wnode.v] != MAX_WEIGHT) { 
-                    //weight_t new_dist = prop_dist[wnode.v] + wnode.w;
-                    //tmp_dist[nid] = std::min(tmp_dist[nid], new_dist);
-                //}
-            //}
-        //}
-
-//#ifdef DEBUG_ON
-        //#pragma omp critical
-        //{
-            //std::cout << "Done propagating: " << tid << std::endl;
-        //}
-//#endif // DEBUG_ON
-
-        //#pragma omp barrier
-
-        //// Apply phase.
-        //for (int nid = tid; nid < g.num_nodes(); nid += num_threads) {
-            //if (tmp_dist[nid] != prop_dist[nid]) {
-                //#pragma omp atomic
-                //num_changed++;
-
-                //prop_dist[nid] = tmp_dist[nid];
-            //}
-        //}
-
-//#ifdef DEBUG_ON
-        //#pragma omp critical
-        //{
-            //std::cout << "Done applying: " << tid << std::endl;
-        //}
-//#endif // DEBUG_ON
-
-        //#pragma omp barrier
-    //} while(num_changed != 0);
-
-////#ifdef DEBUG_ON
-    //#pragma omp critical
-    //{
-        //std::cout << "Exited: " << tid << " " << num_changed << std::endl;
-    //}
-////#endif // DEBUG_ON
 }
 
 void sssp_pull(wgraph_t &g, int **ret_dist) {
