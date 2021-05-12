@@ -17,8 +17,8 @@
 // Shared var: number of updated nodes.
 int num_changed = 1;
 
-void kernel_sssp_pull(wgraph_t &g, int *prop_dist, int *tmp_dist, int tid, 
-        int num_threads
+void kernel_sssp_pull(wgraph_t &g, weight_t *prop_dist, weight_t *tmp_dist, 
+        int tid, int num_threads
 ) {
 #ifdef DEBUG_ON
     int iters = 0; // Iteration count.
@@ -69,7 +69,7 @@ void kernel_sssp_pull(wgraph_t &g, int *prop_dist, int *tmp_dist, int tid,
     }
 }
 
-void sssp_pull(wgraph_t &g, int **ret_dist) {
+void sssp_pull(wgraph_t &g, weight_t **ret_dist) {
     // Initialize distance arrays.
     weight_t *dist = (weight_t *) malloc(g.num_nodes() * sizeof(weight_t));
     weight_t *tmp  = (weight_t *) malloc(g.num_nodes() * sizeof(weight_t));
@@ -86,6 +86,7 @@ void sssp_pull(wgraph_t &g, int **ret_dist) {
     // Start kernel.
     Timer timer;
     std::cout << "Starting kernel." << std::endl;
+    omp_set_num_threads(8);
     timer.Start();
 
     #pragma omp parallel
@@ -113,17 +114,32 @@ int main(int argc, char *argv[]) {
     WeightedBuilder b(cli);
     wgraph_t g = b.MakeGraph();
     wgraph_t ordered_g = b.RelabelByDegree(g);
+    //wgraph_t ordered_g = b.MakeGraph();
 
     // Run SSSP.
-    int *distances = nullptr;
+    weight_t *distances = nullptr;
     sssp_pull(ordered_g, &distances);
 
-
     if (cli.scale() <= 4) {
+        std::cout << "node neighbors" << std::endl;
+        for (int i = 0; i < ordered_g.num_nodes(); i++) {
+            std::cout << " > node " << i << std::endl;
+            for (auto &out_nei : ordered_g.out_neigh(i)) {
+            //for (auto &out_nei : ordered_g.in_neigh(i)) {
+                std::cout << "    > node " << out_nei.v << ": " << out_nei.w
+                    << std::endl;
+            }
+        }
+
         std::cout << "node: distance" << std::endl;
         for (int i = 0; i < ordered_g.num_nodes(); i++)
-            std::cout << i << ": " << distances[i] << std::endl;
+            std::cout << " > " << i << ": " << distances[i] << std::endl;
     }
+
+    //WeightedWriter w(ordered_g);
+    //w.WriteGraph("graph.wel");
+
+    //WeightedReader r("graph.wel");
 
     return EXIT_SUCCESS;
 }

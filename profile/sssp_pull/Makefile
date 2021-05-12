@@ -13,7 +13,7 @@ prof_sssp_pull.exe: ../../src/sssp_pull_cpu.cpp
 
 .PHONY: test
 test: prof_sssp_pull.exe
-	./prof_sssp_pull.exe -g 20 -k 3 
+	./prof_sssp_pull.exe -g 19 -k 16
 
 .PHONY: clean
 clean:
