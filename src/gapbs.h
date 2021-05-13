@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <limits>
 
-#include "../deps/gapbs/src/builder.h"
+#include "gapbs/builder.h" // Custom implementation of builder.
 #include "../deps/gapbs/src/command_line.h"
 #include "../deps/gapbs/src/graph.h"
 #include "../deps/gapbs/src/reader.h"
