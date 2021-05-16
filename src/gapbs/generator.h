@@ -8,7 +8,7 @@
 #include <cinttypes>
 #include <random>
 
-#include "../../deps/gapbs/src/graph.h"
+#include "graph.h"
 #include "../../deps/gapbs/src/pvector.h"
 #include "../../deps/gapbs/src/util.h"
 #include <omp.h>
