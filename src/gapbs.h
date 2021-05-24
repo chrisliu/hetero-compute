@@ -16,17 +16,17 @@
 #include "../deps/gapbs/src/reader.h"
 #include "../deps/gapbs/src/writer.h"
 
-using nid_t = std::int32_t;
+using nid_t    = std::int32_t;
 using weight_t = float;
 
-using wnode_t = NodeWeight<nid_t, weight_t>;
+using wnode_t  = NodeWeight<nid_t, weight_t>;
 using wgraph_t = CSRGraph<nid_t, wnode_t>;
 
 using WeightedBuilder = BuilderBase<nid_t, wnode_t, weight_t>;
-using WeightedWriter = WriterBase<nid_t, wnode_t>; 
-using WeightedReader = Reader<nid_t, wnode_t, weight_t>;
+using WeightedWriter  = WriterBase<nid_t, wnode_t>; 
+using WeightedReader  = Reader<nid_t, wnode_t, weight_t>;
 
-const weight_t MAX_WEIGHT = std::numeric_limits<weight_t>::max();
+const weight_t MAX_WEIGHT = std::numeric_limits<weight_t>::max() - 1;
 
 typedef struct {
     nid_t    v;

@@ -1,6 +1,7 @@
-CPP_COMPILER = g++-10
-CPP_FLAGS    = -O2 --std=c++11 -fopenmp
-CXX          = $(CPP_COMPILER) $(CPP_FLAGS)
+CPP_COMPILER    = nvcc
+CPP_FLAGS       = -O2 --std=c++11
+CROSS_CPP_FLAGS = -fopenmp
+CXX             = $(CPP_COMPILER) $(CPP_FLAGS) -Xcompiler ${CROSS_CPP_FLAGS}
 
 # Name of profiler.
 PROF_NAME    = graphsize 
@@ -8,13 +9,13 @@ PROF_NAME    = graphsize
 .PHONY: all
 all: prof_sssp_pull.exe
 
-prof_sssp_pull.exe: ../../src/sssp_pull.cpp
-	$(CXX) ../../src/sssp_pull.cpp -o prof_sssp_pull.exe
+prof_sssp_pull.exe: ../../src/sssp_pull.cu
+	$(CXX) ../../src/sssp_pull.cu -o prof_sssp_pull.exe
 
-.PHONY: test
+.HONY: test
 test: prof_sssp_pull.exe
-	./prof_sssp_pull.exe -g 20 -k 16
-	#./prof_sssp_pull.exe -g 3 -k 3
+	#./prof_sssp_pull.exe -g 25 -k 16
+	./prof_sssp_pull.exe -g 3 -k 3
 
 .PHONY: clean
 clean:
