@@ -2,13 +2,14 @@
  * Implementations of CPU and GPU SSSP pull with data race.
  */
 
+#include <cstring>
 #include <omp.h> 
 
-
+#include "cuda.h"
 #include "gapbs.h"
 #include "util.h"
 
-// Forward decl.
+/** Forward decl. */
 void kernel_sssp_pull_cpu(const wgraph_t &g, weight_t *dist, const int tid, 
         const int num_threads, int &updated);
 void sssp_pull_cpu(const wgraph_t &g, weight_t **ret_dist);
@@ -16,6 +17,10 @@ void sssp_pull_gpu(const wgraph_t &g, weight_t **ret_dist);
 __global__ void sssp_pull_gpu_impl(const nid_t *index, 
     const cu_wnode_t *neighbors, const int num_nodes, weight_t *dist, 
     int *updated);
+
+/******************************************************************************
+ ***** Main Function **********************************************************
+ ******************************************************************************/
 
 int main(int argc, char *argv[]) {
     // Obtain command line configs.
@@ -26,12 +31,17 @@ int main(int argc, char *argv[]) {
     WeightedBuilder b(cli);
     wgraph_t g = b.MakeGraph();
     wgraph_t ordered_g = b.RelabelByDegree(g);
-    //wgraph_t ordered_g = b.MakeGraph();
 
     // Run SSSP.
-    weight_t *distances = nullptr;
-    sssp_pull_cpu(ordered_g, &distances);
-    /*sssp_pull_gpu(ordered_g, &distances);*/
+    weight_t *cpu_distances = nullptr;
+    sssp_pull_cpu(ordered_g, &cpu_distances);
+    weight_t *gpu_distances = nullptr;
+    sssp_pull_gpu(ordered_g, &gpu_distances);
+
+    bool is_dist_same = !std::memcmp(cpu_distances, gpu_distances, 
+            g.num_nodes() * sizeof(weight_t));
+    std::cout << "CPU distances " << (is_dist_same ? "==" : "!=")
+        << " GPU distances" << std::endl;
 
     if (cli.scale() <= 4) {
         std::cout << "node neighbors" << std::endl;
@@ -45,13 +55,12 @@ int main(int argc, char *argv[]) {
 
         std::cout << "node: distance" << std::endl;
         for (int i = 0; i < ordered_g.num_nodes(); i++)
-            std::cout << " > " << i << ": " << distances[i] << std::endl;
+            std::cout << " > " << i << ": " << cpu_distances[i] << std::endl;
     }
 
-    //WeightedWriter w(ordered_g);
-    //w.WriteGraph("graph.wel");
-
-    //WeightedReader r("graph.wel");
+    // Free memory.
+    delete[] cpu_distances;
+    delete[] gpu_distances;
 
     return EXIT_SUCCESS;
 }
@@ -105,17 +114,15 @@ void sssp_pull_cpu(const wgraph_t &g, weight_t **ret_dist) {
 
 void sssp_pull_gpu(const wgraph_t &g, weight_t **ret_dist) {
     /// Setup.
-    std::cout << "Setting up ..." << std::endl;
     // Copy graph.
-    std::cout << " > Copying graph ..." << std::endl;
     nid_t      *index     = nullptr;
     cu_wnode_t *neighbors = nullptr;
     wgraph_to_cugraph(g, &index, &neighbors);
-    size_t index_size     = g.num_nodes() * sizeof(nid_t);
-    size_t neighbors_size = 2 * g.num_edges() * sizeof(cu_wnode_t);
 
-    nid_t      *cu_index     = nullptr;
-    cu_wnode_t *cu_neighbors = nullptr;
+    size_t     index_size     = g.num_nodes() * sizeof(nid_t);
+    size_t     neighbors_size = 2 * g.num_edges() * sizeof(cu_wnode_t);
+    nid_t      *cu_index      = nullptr;
+    cu_wnode_t *cu_neighbors  = nullptr;
     cudaMalloc((void **) &cu_index, index_size);
     cudaMalloc((void **) &cu_neighbors, neighbors_size);
     cudaMemcpy(cu_index, index, index_size, cudaMemcpyHostToDevice);
@@ -123,16 +130,17 @@ void sssp_pull_gpu(const wgraph_t &g, weight_t **ret_dist) {
 
     delete[] index; delete[] neighbors;
 
-    // Distance and update counter.
-    std::cout << " > Initializing distance and update counter ..." << std::endl;
+    // Update counter.
     int *cu_updated = nullptr;
     cudaMalloc((void **) &cu_updated, sizeof(int));
     
+    // Distance.
     weight_t *dist = new weight_t[g.num_nodes()];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes(); i++)
         dist[i] = MAX_WEIGHT;
-    dist[0] = 0;
+    dist[0] = 0; // Arbitrarily set start.
+
     weight_t *cu_dist = nullptr;
     size_t dist_size = g.num_nodes() * sizeof(weight_t);
     cudaMalloc((void **) &cu_dist, dist_size);
@@ -147,7 +155,9 @@ void sssp_pull_gpu(const wgraph_t &g, weight_t **ret_dist) {
     while (updated != 0) {
         cudaMemset(cu_updated, 0, sizeof(int));
 
-        sssp_pull_gpu_impl<<<1, 8>>>(cu_index, cu_neighbors, g.num_nodes(),
+        // Note: Must run with thread count >= 32 since warp level 
+        //       synchronization is performed.
+        sssp_pull_gpu_impl<<<64, 1024>>>(cu_index, cu_neighbors, g.num_nodes(),
                 cu_dist, cu_updated);
 
         cudaMemcpy(&updated, cu_updated, sizeof(int), cudaMemcpyDeviceToHost);
@@ -158,12 +168,10 @@ void sssp_pull_gpu(const wgraph_t &g, weight_t **ret_dist) {
         << std::endl;
 
     // Copy distances.
-    std::cout << "Copying output ..." << std::endl;
     cudaMemcpy(dist, cu_dist, dist_size, cudaMemcpyDeviceToHost);
     *ret_dist = dist;
 
     // Free memory.
-    std::cout << "Freeing memory ..." << std::endl;
     cudaFree(cu_index);
     cudaFree(cu_neighbors);
     cudaFree(cu_updated);
@@ -224,22 +232,27 @@ __global__
 void sssp_pull_gpu_impl(const nid_t *index, const cu_wnode_t *neighbors, 
         const int num_nodes, weight_t *dist, int *updated
 ) {
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid         = blockIdx.x * blockDim.x + threadIdx.x;
+    int warpid      = tid % warpSize;
     int num_threads = gridDim.x * blockDim.x;
 
     int local_updated = 0;
 
-    for (int nid = tid; nid < num_nodes; nid += num_threads) {
+    for (int nid = tid / warpSize; nid < num_nodes; 
+            nid += (num_threads / warpSize)
+    ) {
         weight_t new_dist = dist[nid];
 
-        // Find shartest candiadte distance.
-        for (int i = index[nid]; i < index[nid + 1]; i++) {
+        // Find shortest candidate distance.
+        for (int i = index[nid] + warpid; i < index[nid + 1]; i += warpSize) {
             weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;
             new_dist = min(prop_dist, new_dist);
         }
 
+        new_dist = warp_min(new_dist);
+
         // Update distance if applicable.
-        if (new_dist != dist[nid]) {
+        if (warpid == 0 and new_dist != dist[nid]) {
             dist[nid] = new_dist;
             local_updated++;
         }

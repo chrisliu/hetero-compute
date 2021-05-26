@@ -1,9 +1,9 @@
-#ifndef GAPBS_H
-#define GAPBS_H
-
 /**
  * GAPBS header and helper functions. 
  */
+
+#ifndef GAPBS_H
+#define GAPBS_H
 
 #include <cstdint>
 #include <limits>
@@ -29,8 +29,8 @@ using WeightedReader  = Reader<nid_t, wnode_t, weight_t>;
 const weight_t MAX_WEIGHT = std::numeric_limits<weight_t>::max() - 1;
 
 typedef struct {
-    nid_t    v;
-    weight_t w;
+    nid_t    v; // Destination node ID.
+    weight_t w; // Edge weight.
 } cu_wnode_t;
 
 /**

@@ -15,7 +15,8 @@ prof_sssp_pull.exe: ../../src/sssp_pull.cu
 .HONY: test
 test: prof_sssp_pull.exe
 	#./prof_sssp_pull.exe -g 25 -k 16
-	./prof_sssp_pull.exe -g 3 -k 3
+	./prof_sssp_pull.exe -g 17 -k 16
+	#./prof_sssp_pull.exe -g 3 -k 3
 
 .PHONY: clean
 clean:
