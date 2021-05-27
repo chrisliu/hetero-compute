@@ -1,6 +1,8 @@
 #ifndef SSSP_PULL_CPU_H
 #define SSSP_PULL_CPU_H
 
+#include <omp.h>
+
 #include "gapbs.h"
 #include "util.h"
 

@@ -3,8 +3,7 @@
  */
 
 #include <cstdlib>
-#include <cstring>
-#include <omp.h> 
+#include <cstring> // memcmp
 
 #include "gapbs.h"
 #include "util.h"

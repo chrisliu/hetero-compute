@@ -1,6 +1,8 @@
 #ifndef SSSP_PULL_GPU_H
 #define SSSP_PULL_GPU_H
 
+#include <omp.h> 
+
 #include "cuda.h"
 #include "gapbs.h"
 #include "util.h"
