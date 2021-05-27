@@ -5,12 +5,11 @@
 #include <cstdlib>
 #include <cstring> // memcmp
 
-#include "gapbs.h"
-#include "util.h"
+#include "../../src/gapbs.h"
 
 /** Kernels */
-#include "sssp_pull_cpu.h"
-#include "sssp_pull_gpu.cuh"
+#include "../../src/kernels/sssp_pull_cpu.h"
+#include "../../src/kernels/sssp_pull_gpu.cuh"
 
 /******************************************************************************
  ***** Main Function **********************************************************

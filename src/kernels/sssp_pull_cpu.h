@@ -3,8 +3,8 @@
 
 #include <omp.h>
 
-#include "gapbs.h"
-#include "util.h"
+#include "../gapbs.h"
+#include "../util.h"
 
 /** Forward decl. */
 void kernel_sssp_pull_cpu(const wgraph_t &g, weight_t *dist, const int tid, 

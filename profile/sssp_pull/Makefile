@@ -3,14 +3,11 @@ CPP_FLAGS       = -O2 --std=c++11
 CROSS_CPP_FLAGS = -fopenmp
 CXX             = $(CPP_COMPILER) $(CPP_FLAGS) -Xcompiler ${CROSS_CPP_FLAGS}
 
-# Name of profiler.
-PROF_NAME    = graphsize 
-
 .PHONY: all
 all: prof_sssp_pull.exe
 
-prof_sssp_pull.exe: ../../src/sssp_pull.cu
-	$(CXX) ../../src/sssp_pull.cu -o prof_sssp_pull.exe
+prof_sssp_pull.exe: sssp_pull.cu
+	$(CXX) sssp_pull.cu -o prof_sssp_pull.exe
 
 .HONY: test
 test: prof_sssp_pull.exe

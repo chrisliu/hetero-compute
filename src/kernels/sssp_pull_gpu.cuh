@@ -3,9 +3,9 @@
 
 #include <omp.h> 
 
-#include "cuda.h"
-#include "gapbs.h"
-#include "util.h"
+#include "../cuda.h"
+#include "../gapbs.h"
+#include "../util.h"
 
 /** Forward decl. */
 __global__ void sssp_pull_gpu_impl(const nid_t *index, 
