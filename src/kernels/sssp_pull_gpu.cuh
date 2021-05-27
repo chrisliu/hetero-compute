@@ -1,14 +1,20 @@
 #ifndef SSSP_PULL_GPU_H
 #define SSSP_PULL_GPU_H
 
+/*#include <nvfunctional>*/
+#include <functional>
 #include <omp.h> 
 
 #include "../cuda.h"
 #include "../gapbs.h"
 #include "../util.h"
 
+// Epoch kernel type.
+typedef void (*sssp_gpu_epoch_func)(const nid_t *, 
+        const cu_wnode_t *, const nid_t, const nid_t, weight_t *, nid_t *);
+
 /** Forward decl. */
-__global__ void sssp_pull_gpu_impl(const nid_t *index, 
+__global__ void sssp_pull_gpu_impl(const nid_t *index,
     const cu_wnode_t *neighbors, const nid_t start_id, const nid_t end_id,
     weight_t *dist, nid_t *updated);
 

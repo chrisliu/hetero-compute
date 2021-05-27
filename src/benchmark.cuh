@@ -87,24 +87,27 @@ protected:
  */
 class SSSPGPUBenchmark : public TreeBenchmark {
 public:
-    // TODO: pass in specific kernel.
-    SSSPGPUBenchmark(const wgraph_t *g_, const int block_count_ = 8,
+    SSSPGPUBenchmark(const wgraph_t *g_, 
+            sssp_gpu_epoch_func epoch_kernel_ = sssp_pull_gpu_impl,
+            const int block_count_ = 8,
             const int thread_count_ = 1024); 
     ~SSSPGPUBenchmark();
 
-    // TODO: dynamically modify block and thread count.
-    // TODO: dynamically modify kernel.
+    void set_epoch_kernel(sssp_gpu_epoch_func epoch_kernel_);
+
+    // Exposed block count and thread count to allow dynamic configuration.
+    int block_count;   // Number of blocks to launch kernel.
+    int thread_count;  // Number of threads to launch kernel.
 
 protected:
+    sssp_gpu_epoch_func epoch_kernel; // GPU epoch kernel.
+
     nid_t      *index;        // (CPU) graph indices (used to calculate degree).
     weight_t   *init_dist;    // (CPU) initial distances. 
     nid_t      *cu_index;     // (GPU) graph indices.
     cu_wnode_t *cu_neighbors; // (GPU) graph neighbors and weights.
     weight_t   *cu_dist;      // (GPU) distances.
     nid_t      *cu_updated;   // (GPU) update counter.
-
-    int        block_count;   // Number of blocks to launch kernel.
-    int        thread_count;  // Number of threads to launch kernel.
 
     segment_res_t benchmark_segment(const int start, const int end);
 };
@@ -196,8 +199,10 @@ layer_res_t TreeBenchmark::layer_microbenchmark(const int depth) {
  ******************************************************************************/
 
 SSSPGPUBenchmark::SSSPGPUBenchmark(const wgraph_t *g_,
+        sssp_gpu_epoch_func epoch_kernel_,
         const int block_count_, const int thread_count_)
     : TreeBenchmark(g_)
+    , epoch_kernel(epoch_kernel_)
     , block_count(block_count_)
     , thread_count(thread_count_)
 {
@@ -244,6 +249,15 @@ SSSPGPUBenchmark::~SSSPGPUBenchmark() {
 }
 
 /**
+ * Sets GPU epoch kernel benchmark will run.
+ * Parameters:
+ *   - epoch_kernel_ <- new SSSP epoch kernel.
+ */
+void SSSPGPUBenchmark::set_epoch_kernel(sssp_gpu_epoch_func epoch_kernel_) {
+    epoch_kernel = epoch_kernel_;
+}
+
+/**
  * Performs benchmark on a single slice of nodes of range [start, end).
  * Parameters:
  *   - start <- starting node ID.
@@ -272,7 +286,9 @@ segment_res_t SSSPGPUBenchmark::benchmark_segment(const nid_t start,
 
     for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
         timer.Start();
-        sssp_pull_gpu_impl<<<block_count, thread_count>>>(cu_index, cu_neighbors,
+        /*sssp_pull_gpu_impl<<<block_count, thread_count>>>(cu_index, cu_neighbors,*/
+                /*start, end, cu_dist, cu_updated);*/
+        (*epoch_kernel)<<<block_count, thread_count>>>(cu_index, cu_neighbors,
                 start, end, cu_dist, cu_updated);
         timer.Stop();
         total_time += timer.Millisecs();

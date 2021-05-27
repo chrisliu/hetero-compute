@@ -11,7 +11,8 @@
 
 #include <type_traits>
 
-#define ALLWARP (1 << warpSize - 1) // Mask for all warps.
+// Mask for all warps.
+#define ALLWARP (1 << warpSize - 1) 
 
 // https://stackoverflow.com/questions/16252902/sfinae-set-of-types-contains-the-type
 template <typename T, typename ...> struct is_contained : std::false_type {};
