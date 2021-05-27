@@ -8,7 +8,7 @@
 
 /** Forward decl. */
 void kernel_sssp_pull_cpu(const wgraph_t &g, weight_t *dist, const int tid, 
-        const int num_threads, int &updated);
+        const int num_threads, nid_t &updated);
 /**
  * Runs SSSP kernel on CPU. Synchronization occurs in serial.
  * Parameters:
@@ -29,7 +29,7 @@ void sssp_pull_cpu(const wgraph_t &g, weight_t **ret_dist) {
     std::cout << "Starting kernel ..." << std::endl;
     Timer timer; timer.Start();
 
-    int updated = 1;
+    nid_t updated = 1;
 
     while (updated != 0) {
         updated = 0;
@@ -63,9 +63,9 @@ void sssp_pull_cpu(const wgraph_t &g, weight_t **ret_dist) {
  *   - updated     <- global counter of number of nodes updated.
  */
 void kernel_sssp_pull_cpu(const wgraph_t &g, weight_t *dist, const int tid,
-        const int num_threads, int &updated
+        const int num_threads, nid_t &updated
 ) {
-    int local_updated = 0;
+    nid_t local_updated = 0;
 
     // Propagate, reduce, and apply.
     for (int nid = tid; nid < g.num_nodes(); nid += num_threads) {

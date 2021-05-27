@@ -9,8 +9,8 @@
 
 /** Forward decl. */
 __global__ void sssp_pull_gpu_impl(const nid_t *index, 
-    const cu_wnode_t *neighbors, const int num_nodes, weight_t *dist, 
-    int *updated);
+    const cu_wnode_t *neighbors, const nid_t start_id, const nid_t end_id,
+    weight_t *dist, nid_t *updated);
 
 /**
  * Runs SSSP kernel on GPU. Synchronization occurs in serial.
@@ -37,8 +37,8 @@ void sssp_pull_gpu(const wgraph_t &g, weight_t **ret_dist) {
     delete[] index; delete[] neighbors;
 
     // Update counter.
-    int *cu_updated = nullptr;
-    cudaMalloc((void **) &cu_updated, sizeof(int));
+    nid_t *cu_updated = nullptr;
+    cudaMalloc((void **) &cu_updated, sizeof(nid_t));
     
     // Distance.
     weight_t *dist = new weight_t[g.num_nodes()];
@@ -53,20 +53,20 @@ void sssp_pull_gpu(const wgraph_t &g, weight_t **ret_dist) {
     cudaMemcpy(cu_dist, dist, dist_size, cudaMemcpyHostToDevice);
 
     // Actual kernel run.
-    int updated = 1;
+    nid_t updated = 1;
 
     std::cout << "Starting kernel ..." << std::endl;
     Timer timer; timer.Start();
 
     while (updated != 0) {
-        cudaMemset(cu_updated, 0, sizeof(int));
+        cudaMemset(cu_updated, 0, sizeof(nid_t));
 
         // Note: Must run with thread count >= 32 since warp level 
         //       synchronization is performed.
-        sssp_pull_gpu_impl<<<64, 1024>>>(cu_index, cu_neighbors, g.num_nodes(),
-                cu_dist, cu_updated);
+        sssp_pull_gpu_impl<<<64, 1024>>>(cu_index, cu_neighbors, 0, 
+                g.num_nodes(), cu_dist, cu_updated);
 
-        cudaMemcpy(&updated, cu_updated, sizeof(int), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&updated, cu_updated, sizeof(nid_t), cudaMemcpyDeviceToHost);
     }
 
     timer.Stop();
@@ -85,25 +85,26 @@ void sssp_pull_gpu(const wgraph_t &g, weight_t **ret_dist) {
 }
 
 /**
- * Runs SSSP pull on GPU for one epoch.
+ * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
  * Parameters:
  *   - index     <- graph index returned by deconstruct_wgraph().
  *   - neighbors <- graph neighbors returned by deconstruct_wgraph().
- *   - num_nodes <- number of nodes in this graph.
+ *   - start_id  <- starting node id.
+ *   - end_id    <- ending node id (exclusive).
  *   - dist      <- input distance and output distances computed this epoch.
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__ 
 void sssp_pull_gpu_impl(const nid_t *index, const cu_wnode_t *neighbors, 
-        const int num_nodes, weight_t *dist, int *updated
+        const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
 ) {
     int tid         = blockIdx.x * blockDim.x + threadIdx.x;
     int warpid      = tid % warpSize;
     int num_threads = gridDim.x * blockDim.x;
 
-    int local_updated = 0;
+    nid_t local_updated = 0;
 
-    for (int nid = tid / warpSize; nid < num_nodes; 
+    for (int nid = start_id + tid / warpSize; nid < end_id; 
             nid += (num_threads / warpSize)
     ) {
         weight_t new_dist = dist[nid];
