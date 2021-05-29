@@ -87,8 +87,7 @@ protected:
  */
 class SSSPGPUBenchmark : public TreeBenchmark {
 public:
-    SSSPGPUBenchmark(const wgraph_t *g_, 
-            sssp_gpu_epoch_func epoch_kernel_ = sssp_pull_gpu_impl,
+    SSSPGPUBenchmark(const wgraph_t *g_, sssp_gpu_epoch_func epoch_kernel_,
             const int block_count_ = 8,
             const int thread_count_ = 1024); 
     ~SSSPGPUBenchmark();
@@ -282,16 +281,22 @@ segment_res_t SSSPGPUBenchmark::benchmark_segment(const nid_t start,
 
     // Time kernel (avg of BENCHMARK_TIME_ITERS).
     double total_time = 0.0;
-    Timer timer; 
+    float millis = 0;
+
+    // CUDA timer.
+    cudaEvent_t start_t, stop_t;
+    cudaEventCreate(&start_t); cudaEventCreate(&stop_t);
 
     for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
-        timer.Start();
-        /*sssp_pull_gpu_impl<<<block_count, thread_count>>>(cu_index, cu_neighbors,*/
-                /*start, end, cu_dist, cu_updated);*/
+        cudaEventRecord(start_t);
         (*epoch_kernel)<<<block_count, thread_count>>>(cu_index, cu_neighbors,
                 start, end, cu_dist, cu_updated);
-        timer.Stop();
-        total_time += timer.Millisecs();
+        cudaEventRecord(stop_t);
+
+        cudaEventSynchronize(stop_t);
+        cudaEventElapsedTime(&millis, start_t, stop_t);
+
+        total_time += millis;
     }
 
     // Save results.

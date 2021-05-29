@@ -11,7 +11,8 @@ prof_sssp_pull.exe: sssp_gpu.cu
 
 .HONY: test
 test: prof_sssp_pull.exe
-	./prof_sssp_gpu.exe -g 25 -k 16
+	#./prof_sssp_gpu.exe -g 25 -k 16
+	./prof_sssp_gpu.exe -g 23 -k 16
 	#./prof_sssp_gpu.exe -g 20 -k 16
 	#./prof_sssp_gpu.exe -g 3 -k 3
 

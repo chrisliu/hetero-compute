@@ -5,6 +5,8 @@
 #include "../../src/gapbs.h"
 #include "../../src/benchmark.cuh"
 
+#define DEPTH 3
+
 int main(int argc, char *argv[]) {
     // Obtain command line configs.
     CLBase cli(argc, argv);
@@ -15,29 +17,31 @@ int main(int argc, char *argv[]) {
     wgraph_t g = b.MakeGraph();
     wgraph_t ordered_g = b.RelabelByDegree(g);
 
-    // Run benchmark.
-    SSSPGPUBenchmark bench(&ordered_g);
-    
-    /*layer_res_t res = bench.layer_microbenchmark(3); */
-    /*for (size_t i = 0; i < res.num_segments; i++) {*/
-        /*std::cout << "Segment " << (i + 1) << std::endl;*/
-        /*std::cout << " > Average degree:   " << res.segments[i].avg_degree */
-            /*<< std::endl;*/
-        /*std::cout << " > # of edges:       " << res.segments[i].num_edges*/
-            /*<< std::endl;*/
-        /*std::cout << " > Computation time: " << res.segments[i].millisecs*/
-            /*<< std::endl;*/
-        /*std::cout << " > TEPS:             " << res.segments[i].teps*/
-            /*<< std::endl;*/
-    /*}    */
+    // Run warp min kernel.
+    {
+        SSSPGPUBenchmark bench(&ordered_g, sssp_pull_gpu_warp_min);
+        
+        tree_res_t tree_res_warp_min = bench.tree_microbenchmark(DEPTH);
 
-    // Run tree decomposition benchmark.
-    tree_res_t tree_res = bench.tree_microbenchmark(3);
-    
-    // Write out results.
-    std::fstream ofs("results.yaml", std::ofstream::out);
-    ofs << tree_res;
-    ofs.close();
+        std::cout << tree_res_warp_min;
+        
+        // Write out results.
+        /*std::fstream ofs("results.yaml", std::ofstream::out);*/
+        /*ofs << tree_res_warp_min;*/
+        /*ofs.close();*/
+    }
+
+    // Run naive kernel.
+    {
+        SSSPGPUBenchmark bench(&ordered_g, sssp_pull_gpu_naive);
+        tree_res_t tree_res_naive = bench.tree_microbenchmark(DEPTH);
+        
+        std::cout << tree_res_naive;
+    }
+
+    weight_t *ret_dist = nullptr;
+    sssp_pull_gpu(ordered_g, sssp_pull_gpu_warp_min, &ret_dist); delete[] ret_dist;
+    sssp_pull_gpu(ordered_g, sssp_pull_gpu_naive, &ret_dist); delete[] ret_dist;
 
     return EXIT_SUCCESS;
 }
