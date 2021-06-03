@@ -42,7 +42,7 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(const nid_t start_id,
     result.end_id     = end_id;
     result.num_edges  = g->index[end_id] - g->index[start_id];
     result.avg_degree = static_cast<float>(result.num_edges) 
-        / (end_id- start_id);
+        / (end_id - start_id);
 
     // Time kernel (avg of BENCHMARK_TIME_ITERS).
     Timer timer;
@@ -71,7 +71,7 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(const nid_t start_id,
 
     // Save results.
     result.millisecs = total_time / BENCHMARK_TIME_ITERS;
-    result.teps      = result.num_edges / (result.millisecs * 1000);
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9;
 
     return result;
 }

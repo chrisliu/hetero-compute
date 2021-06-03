@@ -137,7 +137,7 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
 
     // Save results.
     result.millisecs = total_time / BENCHMARK_TIME_ITERS;
-    result.teps      = result.num_edges / (result.millisecs * 1000);
+    result.gteps      = result.num_edges / (result.millisecs / 1000) / 1e9;
 
     return result;
 }

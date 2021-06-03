@@ -30,7 +30,7 @@ typedef struct {
     float  avg_degree; // Average degree of segment.
     nid_t  num_edges;  // Total number of edges.
     double millisecs;  // Execution time.  
-    double teps;       // TEPS.
+    double gteps;      // GTEPS.
 } segment_res_t;
 
 /**
@@ -111,7 +111,7 @@ std::ostream& operator<<(std::ostream& os, const tree_res_t res) {
                << "        avg_deg: " << cur_seg.avg_degree << std::endl
                << "        num_edges: " << cur_seg.num_edges << std::endl
                << "        millis: " << cur_seg.millisecs << std::endl
-               << "        teps: " << cur_seg.teps << std::endl;
+               << "        gteps: " << cur_seg.gteps << std::endl;
         }
     }
     return os;
