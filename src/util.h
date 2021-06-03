@@ -2,9 +2,9 @@
  * Utilities.
  */
 
-#ifndef UTIL_H
-#define UTIL_H
+#ifndef SRC__UTIL_H
+#define SRC__UTIL_H
 
 #include "../deps/gapbs/src/timer.h"
 
-#endif // UTIL_H
+#endif // SRC__UTIL_H

@@ -1,13 +1,18 @@
-#ifndef SSSP_PULL_CPU_H
-#define SSSP_PULL_CPU_H
+/**
+ * CPU implementations of SSSP pull kernels.
+ */
 
+#ifndef SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H
+#define SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H
+
+#include <iostream>
 #include <omp.h>
 
-#include "../gapbs.h"
-#include "../util.h"
+#include "../../graph.h"
+#include "../../util.h"
 
 /** Forward decl. */
-void kernel_sssp_pull_cpu(const wgraph_t &g, weight_t *dist, const int tid, 
+void kernel_sssp_pull_cpu(const CSRWGraph &g, weight_t *dist, const int tid, 
         const int num_threads, nid_t &updated);
 /**
  * Runs SSSP kernel on CPU. Synchronization occurs in serial.
@@ -15,14 +20,14 @@ void kernel_sssp_pull_cpu(const wgraph_t &g, weight_t *dist, const int tid,
  *   - g        <- graph.
  *   - ret_dist <- pointer to the address of the return distance array.
  */
-void sssp_pull_cpu(const wgraph_t &g, weight_t **ret_dist) {
-    weight_t *dist = new weight_t[g.num_nodes()];
+void sssp_pull_cpu(const CSRWGraph &g, weight_t **ret_dist) {
+    weight_t *dist = new weight_t[g.num_nodes];
 
     #pragma omp parallel for
-    for (int i = 0; i < g.num_nodes(); i++)
+    for (int i = 0; i < g.num_nodes; i++)
         dist[i] = MAX_WEIGHT;
 
-    // Arbitrary: Set lowest degree node as source.
+    // Arbitrary: Set highest degree node as source.
     dist[0] = 0;
 
     // Start kernel.
@@ -62,17 +67,17 @@ void sssp_pull_cpu(const wgraph_t &g, weight_t **ret_dist) {
  *   - num_threads <- number of processors.
  *   - updated     <- global counter of number of nodes updated.
  */
-void kernel_sssp_pull_cpu(const wgraph_t &g, weight_t *dist, const int tid,
+void kernel_sssp_pull_cpu(const CSRWGraph &g, weight_t *dist, const int tid,
         const int num_threads, nid_t &updated
 ) {
     nid_t local_updated = 0;
 
     // Propagate, reduce, and apply.
-    for (int nid = tid; nid < g.num_nodes(); nid += num_threads) {
+    for (int nid = tid; nid < g.num_nodes; nid += num_threads) {
         weight_t new_dist = dist[nid];
 
         // Find shortest candidate distance.
-        for (wnode_t nei : g.in_neigh(nid)) {
+        for (wnode_t nei : g.get_neighbors(nid)) {
             weight_t prop_dist = dist[nei.v] + nei.w;
             new_dist = std::min(prop_dist, new_dist);
         }
@@ -89,4 +94,4 @@ void kernel_sssp_pull_cpu(const wgraph_t &g, weight_t *dist, const int tid,
     updated += local_updated;
 }
 
-#endif // SSSP_PULL_CPU_H
+#endif // SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H

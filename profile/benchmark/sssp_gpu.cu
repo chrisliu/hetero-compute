@@ -2,46 +2,56 @@
 #include <fstream>
 #include <iostream>
 
-#include "../../src/gapbs.h"
-#include "../../src/benchmark.cuh"
+#include "../../src/graph.h"
+#include "../../src/util.h"
+#include "../../src/benchmarks/gpu_benchmark.cuh"
+#include "../../src/kernels/cpu/sssp_pull.h"
+#include "../../src/kernels/gpu/sssp_pull.cuh"
 
 #define DEPTH 3
 
 int main(int argc, char *argv[]) {
-    // Obtain command line configs.
-    CLBase cli(argc, argv);
-    if (not cli.ParseArgs()) { return EXIT_FAILURE; }
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " [graph.wsg]" << std::endl;
+        return EXIT_FAILURE;
+    }
 
-    // Build ordered graph (by descending degree).
-    WeightedBuilder b(cli);
-    wgraph_t g = b.MakeGraph();
-    wgraph_t ordered_g = b.RelabelByDegree(g);
+    // Load in graph.
+    CSRWGraph g;
+    std::cout << "Loading graph ..." << std::endl;
+
+    std::ifstream ifs(argv[1], std::ifstream::in | std::ifstream::binary);
+    Timer timer; timer.Start(); // Start timing.
+    ifs >> g;
+    timer.Stop(); // Stop timing.
+    ifs.close();
+
+    std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
+
+    // TODO: reuse benchmark object.
 
     // Run warp min kernel.
     {
-        SSSPGPUBenchmark bench(&ordered_g, sssp_pull_gpu_warp_min);
+        SSSPGPUBenchmark bench(&g, sssp_pull_gpu_warp_min);
         
-        tree_res_t tree_res_warp_min = bench.tree_microbenchmark(DEPTH);
+        tree_res_t res = bench.tree_microbenchmark(DEPTH);
 
-        std::cout << tree_res_warp_min;
-        
-        // Write out results.
-        /*std::fstream ofs("results.yaml", std::ofstream::out);*/
-        /*ofs << tree_res_warp_min;*/
-        /*ofs.close();*/
+        std::cout << res;
     }
 
     // Run naive kernel.
     {
-        SSSPGPUBenchmark bench(&ordered_g, sssp_pull_gpu_naive);
-        tree_res_t tree_res_naive = bench.tree_microbenchmark(DEPTH);
+        SSSPGPUBenchmark bench(&g, sssp_pull_gpu_naive);
         
-        std::cout << tree_res_naive;
+        tree_res_t res = bench.tree_microbenchmark(DEPTH);
+
+        std::cout << res;
     }
 
     weight_t *ret_dist = nullptr;
-    sssp_pull_gpu(ordered_g, sssp_pull_gpu_warp_min, &ret_dist); delete[] ret_dist;
-    sssp_pull_gpu(ordered_g, sssp_pull_gpu_naive, &ret_dist); delete[] ret_dist;
+    sssp_pull_cpu(g, &ret_dist); delete[] ret_dist;
+    sssp_pull_gpu(g, sssp_pull_gpu_naive, &ret_dist); delete[] ret_dist;
+    sssp_pull_gpu(g, sssp_pull_gpu_warp_min, &ret_dist); delete[] ret_dist;
 
     return EXIT_SUCCESS;
 }

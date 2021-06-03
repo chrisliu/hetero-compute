@@ -1,6 +1,6 @@
 CPP_COMPILER    = nvcc
-CPP_FLAGS       = -O2 --std=c++11
-CROSS_CPP_FLAGS = -fopenmp
+CPP_FLAGS       = -O2 --std=c++11 
+CROSS_CPP_FLAGS = -fopenmp 
 CXX             = $(CPP_COMPILER) $(CPP_FLAGS) -Xcompiler ${CROSS_CPP_FLAGS}
 
 .PHONY: all
@@ -12,7 +12,8 @@ prof_sssp_pull.exe: sssp_gpu.cu
 .HONY: test
 test: prof_sssp_pull.exe
 	#./prof_sssp_gpu.exe -g 25 -k 16
-	./prof_sssp_gpu.exe -g 23 -k 16
+	./prof_sssp_gpu.exe graph.wsg 
+	#./prof_sssp_gpu.exe -g 23 -k 16
 	#./prof_sssp_gpu.exe -g 20 -k 16
 	#./prof_sssp_gpu.exe -g 3 -k 3
 

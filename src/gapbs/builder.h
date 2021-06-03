@@ -13,7 +13,7 @@
 
 #include "../../deps/gapbs/src/command_line.h"
 #include "generator.h"
-#include "graph.h"
+#include "../../deps/gapbs/src/graph.h"
 #include "../../deps/gapbs/src/platform_atomics.h"
 #include "../../deps/gapbs/src/pvector.h"
 #include "../../deps/gapbs/src/reader.h"

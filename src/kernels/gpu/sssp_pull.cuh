@@ -1,15 +1,16 @@
-#ifndef SSSP_PULL_GPU_H
-#define SSSP_PULL_GPU_H
+/**
+ * GPU implementations of SSSP pull kernels.
+ */
+
+#ifndef SRC_KERNELS_GPU__KERNEL_SSSP_PULL_GPU_CUH
+#define SRC_KERNELS_GPU__KERNEL_SSSP_PULL_GPU_CUH
 
 #include <omp.h> 
 
-#include "../cuda.h"
-#include "../gapbs.h"
-#include "../util.h"
-
-// Epoch kernel type.
-typedef void (*sssp_gpu_epoch_func)(const nid_t *, 
-        const cu_wnode_t *, const nid_t, const nid_t, weight_t *, nid_t *);
+#include "../kernel_types.h"
+#include "../../cuda.cuh"
+#include "../../graph.h"
+#include "../../util.h"
 
 /**
  * Runs SSSP kernel on GPU. Synchronization occurs in serial.
@@ -17,39 +18,34 @@ typedef void (*sssp_gpu_epoch_func)(const nid_t *,
  *   - g        <- graph.
  *   - ret_dist <- pointer to the address of the return distance array.
  */
-void sssp_pull_gpu(const wgraph_t &g, sssp_gpu_epoch_func epoch_kernel, 
+void sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel, 
         weight_t **ret_dist
 ) {
     /// Setup.
     // Copy graph.
-    nid_t      *index     = nullptr;
-    cu_wnode_t *neighbors = nullptr;
-    wgraph_to_cugraph(g, &index, &neighbors);
-
-    size_t     index_size     = g.num_nodes() * sizeof(nid_t);
-    size_t     neighbors_size = 2 * g.num_edges() * sizeof(cu_wnode_t);
-    nid_t      *cu_index      = nullptr;
-    cu_wnode_t *cu_neighbors  = nullptr;
+    offset_t *cu_index      = nullptr;
+    wnode_t  *cu_neighbors  = nullptr;
+    size_t   index_size     = g.num_nodes * sizeof(offset_t);
+    size_t   neighbors_size = g.num_edges * sizeof(wnode_t);
     cudaMalloc((void **) &cu_index, index_size);
     cudaMalloc((void **) &cu_neighbors, neighbors_size);
-    cudaMemcpy(cu_index, index, index_size, cudaMemcpyHostToDevice);
-    cudaMemcpy(cu_neighbors, neighbors, neighbors_size, cudaMemcpyHostToDevice);
-
-    delete[] index; delete[] neighbors;
+    cudaMemcpy(cu_index, g.index, index_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(cu_neighbors, g.neighbors, neighbors_size, 
+            cudaMemcpyHostToDevice);
 
     // Update counter.
     nid_t *cu_updated = nullptr;
     cudaMalloc((void **) &cu_updated, sizeof(nid_t));
     
     // Distance.
-    weight_t *dist = new weight_t[g.num_nodes()];
+    weight_t *dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
-    for (int i = 0; i < g.num_nodes(); i++)
+    for (int i = 0; i < g.num_nodes; i++)
         dist[i] = MAX_WEIGHT;
     dist[0] = 0; // Arbitrarily set start.
 
     weight_t *cu_dist = nullptr;
-    size_t dist_size = g.num_nodes() * sizeof(weight_t);
+    size_t dist_size = g.num_nodes * sizeof(weight_t);
     cudaMalloc((void **) &cu_dist, dist_size);
 
     // Actual kernel run.
@@ -68,7 +64,7 @@ void sssp_pull_gpu(const wgraph_t &g, sssp_gpu_epoch_func epoch_kernel,
             // Note: Must run with thread count >= 32 since warp level
             //       synchronization is performed.
             (*epoch_kernel)<<<64, 1024>>>(cu_index, cu_neighbors, 0,
-                    g.num_nodes(), cu_dist, cu_updated);
+                    g.num_nodes, cu_dist, cu_updated);
 
             cudaMemcpy(&updated, cu_updated, sizeof(nid_t),
                     cudaMemcpyDeviceToHost);
@@ -103,7 +99,7 @@ void sssp_pull_gpu(const wgraph_t &g, sssp_gpu_epoch_func epoch_kernel,
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__ 
-void sssp_pull_gpu_warp_min(const nid_t *index, const cu_wnode_t *neighbors, 
+void sssp_pull_gpu_warp_min(const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
 ) {
     int tid         = blockIdx.x * blockDim.x + threadIdx.x;
@@ -147,7 +143,7 @@ void sssp_pull_gpu_warp_min(const nid_t *index, const cu_wnode_t *neighbors,
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__ 
-void sssp_pull_gpu_naive(const nid_t *index, const cu_wnode_t *neighbors, 
+void sssp_pull_gpu_naive(const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
 ) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -175,4 +171,4 @@ void sssp_pull_gpu_naive(const nid_t *index, const cu_wnode_t *neighbors,
     atomicAdd(updated, local_updated);
 }
 
-#endif // SSSP_PULL_GPU_H
+#endif // SRC_KERNELS_GPU__KERNEL_SSSP_PULL_GPU_CUH

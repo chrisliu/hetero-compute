@@ -1,15 +1,22 @@
 /**
- * NVIDIA helper functions.
- *
- * Toucan specs:
- *   - Quadro RTX 4000 (compute capability 7.5) [cannot use certain warp level
- *     functionality]
+ * NVIDIA CUDA helper functions.
  */
 
-#ifndef CUDA_H
-#define CUDA_H
+#ifndef SRC__CUDA_CUH
+#define SRC__CUDA_CUH
 
+#include <cstdlib>
+#include <iostream>
 #include <type_traits>
+
+#define CUDA_ERRCHK( err ) {\
+    if (err != cudaSuccess) {\
+        std::cerr << "[" << __FILE__ << ", " << __LINE__ << "] " \
+            << cudaGetErrorName(err) << ": " \
+            << cudaGetErrorString(err) << std::endl;\
+        exit(EXIT_FAILURE);\
+    }\
+}
 
 // Mask for all warps.
 #define ALLWARP (1 << warpSize - 1) 
@@ -61,4 +68,4 @@ T warp_all_min(T val) {
     return val;
 }
 
-#endif // CUDA_H
+#endif // SRC__CUDA_CUH
