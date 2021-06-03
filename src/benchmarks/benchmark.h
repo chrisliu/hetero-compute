@@ -26,9 +26,9 @@
  */
 typedef struct {
     nid_t  start_id;   // Starting node id.
-    nid_t  end_id;     // Ending node id.
+    nid_t  end_id;     // Ending node id (exclusive).
     float  avg_degree; // Average degree of segment.
-    nid_t  num_edges;  // Total number of edges.
+    double num_edges;  // Total number of edges traversed.
     double millisecs;  // Execution time.  
     double gteps;      // GTEPS.
 } segment_res_t;
@@ -50,7 +50,8 @@ typedef struct {
 } tree_res_t;
 
 // YAML generators.
-std::ostream& operator<<(std::ostream& os, const tree_res_t res);
+std::ostream& operator<<(std::ostream &os, const segment_res_t &res);
+std::ostream& operator<<(std::ostream &os, const tree_res_t &res);
 
 /******************************************************************************
  ***** Microbenchmark Classes *************************************************
@@ -96,9 +97,25 @@ protected:
  ******************************************************************************/
 
 /**
+ * Writer for single segment result. Emits valid YAML.
+ */
+std::ostream& operator<<(std::ostream &os, const segment_res_t &res) {
+    os << std::setprecision(10)
+       << "results:" << std::endl
+       << "  - start: " << res.start_id << std::endl
+       << "    end: " << res.end_id << std::endl
+       << "    avg_deg: " << res.avg_degree << std::endl
+       << "    num_edges: " << res.num_edges << std::endl
+       << "    millis: " << res.millisecs << std::endl
+       << "    gteps: " << res.gteps << std::endl;
+
+    return os;
+}
+
+/**
  * Writer for list of layer results. Emits valid YAML.
  */
-std::ostream& operator<<(std::ostream& os, const tree_res_t res) {
+std::ostream& operator<<(std::ostream &os, const tree_res_t &res) {
     os << "results:" << std::endl;
     for (int depth = 0; depth < res.num_layers; depth++) {
         os << "  - depth: " << depth << std::endl

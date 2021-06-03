@@ -21,8 +21,9 @@ using weight_t = float;            // Edge weight type.
 using offset_t = std::int64_t;     // Edge ID type. Represents number of edges
                                    // (Equivalent to GAPBS SGOffset).
 
-// Max weight is 90% of theoretical max.
-const weight_t MAX_WEIGHT = 0.9 * std::numeric_limits<weight_t>::max();
+// Max weight is 95% of theoretical max.
+// Ideally it should be numeric_limits<weight_t>::max() - 1.
+const weight_t MAX_WEIGHT = 0.95f * std::numeric_limits<weight_t>::max();
 
 /** Directed edge struct (which neighbor node ID and what weight). */
 struct wnode_t {
