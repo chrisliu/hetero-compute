@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     }
 
     weight_t *ret_dist = nullptr;
-    sssp_pull_cpu(g, &ret_dist); delete[] ret_dist;
+    sssp_pull_cpu(g, kernel_sssp_pull_cpu, &ret_dist); delete[] ret_dist;
     sssp_pull_gpu(g, sssp_pull_gpu_naive, &ret_dist); delete[] ret_dist;
     sssp_pull_gpu(g, sssp_pull_gpu_warp_min, &ret_dist); delete[] ret_dist;
 

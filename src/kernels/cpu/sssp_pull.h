@@ -8,19 +8,19 @@
 #include <iostream>
 #include <omp.h>
 
+#include "../kernel_types.h"
 #include "../../graph.h"
 #include "../../util.h"
 
-/** Forward decl. */
-void kernel_sssp_pull_cpu(const CSRWGraph &g, weight_t *dist, const int tid, 
-        const int num_threads, nid_t &updated);
 /**
  * Runs SSSP kernel on CPU. Synchronization occurs in serial.
  * Parameters:
  *   - g        <- graph.
  *   - ret_dist <- pointer to the address of the return distance array.
  */
-void sssp_pull_cpu(const CSRWGraph &g, weight_t **ret_dist) {
+void sssp_pull_cpu(const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel, 
+        weight_t **ret_dist
+) {
     weight_t *dist = new weight_t[g.num_nodes];
 
     #pragma omp parallel for
@@ -41,7 +41,7 @@ void sssp_pull_cpu(const CSRWGraph &g, weight_t **ret_dist) {
 
         #pragma omp parallel
         {
-            kernel_sssp_pull_cpu(g, dist, omp_get_thread_num(), 
+            (*epoch_kernel)(g, dist, 0, g.num_nodes, omp_get_thread_num(), 
                     omp_get_num_threads(), updated);
         }
 
@@ -63,17 +63,20 @@ void sssp_pull_cpu(const CSRWGraph &g, weight_t **ret_dist) {
  *   - g           <- graph.
  *   - dist        <- input distances and output distances computed this 
  *                    epoch.
+ *   - start_id    <- starting node id.
+ *   - end_id      <- ending node id (exclusive).
  *   - tid         <- processor id.
  *   - num_threads <- number of processors.
  *   - updated     <- global counter of number of nodes updated.
  */
-void kernel_sssp_pull_cpu(const CSRWGraph &g, weight_t *dist, const int tid,
+void kernel_sssp_pull_cpu(const CSRWGraph &g, weight_t *dist, 
+        const nid_t start_id, const nid_t end_id, const int tid,
         const int num_threads, nid_t &updated
 ) {
     nid_t local_updated = 0;
 
     // Propagate, reduce, and apply.
-    for (int nid = tid; nid < g.num_nodes; nid += num_threads) {
+    for (int nid = start_id + tid; nid < end_id; nid += num_threads) {
         weight_t new_dist = dist[nid];
 
         // Find shortest candidate distance.
