@@ -2,7 +2,7 @@
  * Generic benchmark suites.. 
  */
 
-#ifndef SRC_BENCHMARKS___BENCHMARK_H
+#ifndef SRC_BENCHMARKS__BENCHMARK_H
 #define SRC_BENCHMARKS__BENCHMARK_H
 
 // Number of warmup rounds.
@@ -11,7 +11,9 @@
 #define BENCHMARK_TIME_ITERS 5
 
 #include <iomanip>
+#include <omp.h>
 #include <ostream>
+#include <random>
 
 #include "../graph.h"
 
@@ -51,11 +53,11 @@ typedef struct {
 std::ostream& operator<<(std::ostream& os, const tree_res_t res);
 
 /******************************************************************************
- ***** Microbenchmark Base Classes ********************************************
+ ***** Microbenchmark Classes *************************************************
  ******************************************************************************/
 
 /**
- * Tree based microbenchmark.
+ * Base cass for a tree based microbenchmark.
  * 
  * For a graph g, its nodes are subdivided by 2^{depth}. Each segment's 
  * performance is subsequently evaluated.
@@ -72,8 +74,21 @@ protected:
     const CSRWGraph *g; // CPU graph.
 
     // Benchmark segment of nodes of range [start, end).
-    virtual segment_res_t benchmark_segment(const nid_t start, 
-            const nid_t end) = 0;
+    virtual segment_res_t benchmark_segment(const nid_t start_id, 
+            const nid_t end_id) = 0;
+};
+
+/**
+ * SSSP tree based benchmark.
+ * Initializes a random distance vector to test on.
+ */
+class SSSPTreeBenchmark : public TreeBenchmark {
+public:
+    SSSPTreeBenchmark(const CSRWGraph *g_);
+    ~SSSPTreeBenchmark();
+
+protected:
+    weight_t *init_dist; // Initial distances.
 };
 
 /******************************************************************************
@@ -103,7 +118,7 @@ std::ostream& operator<<(std::ostream& os, const tree_res_t res) {
 }
 
 /******************************************************************************
- ***** Microbenchmark Base Classes' Default Implementations *******************
+ ***** Microbenchmark Classes' Default Implementations ************************
  ******************************************************************************/
 
 TreeBenchmark::TreeBenchmark(const CSRWGraph *g_)
@@ -156,6 +171,29 @@ layer_res_t TreeBenchmark::layer_microbenchmark(const int depth) {
                 (s + 1) * segment_size);        
 
     return results;
+}
+
+SSSPTreeBenchmark::SSSPTreeBenchmark(const CSRWGraph *g_)
+    : TreeBenchmark(g_)
+{
+    // Initialize distances.
+    init_dist = new weight_t[g->num_nodes];
+    unsigned init_seed = 1024; // TODO: make this random?
+    #pragma omp parallel
+    {
+        std::mt19937_64 gen(init_seed + omp_get_thread_num());
+        std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+        for (int i = omp_get_thread_num(); i < g->num_nodes;
+                i += omp_get_num_threads()
+        )
+
+        init_dist[i] = dist(gen);          
+    }
+}
+
+SSSPTreeBenchmark::~SSSPTreeBenchmark() {
+    delete[] init_dist;
 }
 
 #endif // SRC_BENCHMARKS__BENCHMARK_H

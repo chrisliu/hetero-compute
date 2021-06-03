@@ -5,6 +5,7 @@
 #include "../../src/graph.h"
 #include "../../src/util.h"
 #include "../../src/benchmarks/gpu_benchmark.cuh"
+#include "../../src/benchmarks/cpu_benchmark.h"
 #include "../../src/kernels/cpu/sssp_pull.h"
 #include "../../src/kernels/gpu/sssp_pull.cuh"
 
@@ -28,20 +29,27 @@ int main(int argc, char *argv[]) {
 
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
-    // TODO: reuse benchmark object.
-
-    // Run warp min kernel.
+    // Run CPU kernel.
     {
-        SSSPGPUBenchmark bench(&g, sssp_pull_gpu_warp_min);
+        SSSPCPUTreeBenchmark bench(&g, kernel_sssp_pull_cpu);
+
+        tree_res_t res = bench.tree_microbenchmark(DEPTH);
+        
+        std::cout << res;
+    }
+
+    // Run naive kernel.
+    {
+        SSSPGPUTreeBenchmark bench(&g, sssp_pull_gpu_naive);
         
         tree_res_t res = bench.tree_microbenchmark(DEPTH);
 
         std::cout << res;
     }
 
-    // Run naive kernel.
+    // Run warp min kernel.
     {
-        SSSPGPUBenchmark bench(&g, sssp_pull_gpu_naive);
+        SSSPGPUTreeBenchmark bench(&g, sssp_pull_gpu_warp_min);
         
         tree_res_t res = bench.tree_microbenchmark(DEPTH);
 
