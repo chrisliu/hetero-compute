@@ -1,10 +1,11 @@
-# [Placeholder Name] Heterogenous Compute
-Explores executing a graph kernel (SSSP;BFS) concurrently on a heterogeneous system (CPU, GPU; unified, RAM).
+# Graph Processing with Heterogeneous Processors
+Exploring graph algorithm execution across heterogenous processors.
 
 ## Goals
- - [ ] Create a [R-MAT Kronecker graph generator](https://www.cs.cmu.edu/~christos/PUBLICATIONS/siam04.pdf).
- - [ ] Write GPU kernels in Vulkan.
+ - [ ] Graph generation and I/O.
+ - [ ] Construct BFS and SSSP kernels in C++ w/ OpenMP, CUDA, Vulkan.
+ - [x] Benchmark suite for various epoch kernels.
+ - [ ] Heterogeneous epoch kernels that uses both CPU and GPU variants.
 
 ## Contributors
-This project is lead by [Christopher Liu](https://chrisliu.org/) and  advised by Professor [Tyler Sorenson](https://users.soe.ucsc.edu/~tsorensen/).
-
+This project is lead by [Christopher Liu](https://chrisliu.org/) who is advised by Professor [Tyler Sorenson](https://users.soe.ucsc.edu/~tsorensen/).
