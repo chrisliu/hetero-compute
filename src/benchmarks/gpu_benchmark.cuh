@@ -19,7 +19,7 @@
 class SSSPGPUTreeBenchmark : public SSSPTreeBenchmark {
 public:
     SSSPGPUTreeBenchmark(const CSRWGraph *g_, sssp_gpu_epoch_func epoch_kernel_,
-            const int block_count_ = 8, const int thread_count_ = 1024); 
+            const int block_count_ = 64, const int thread_count_ = 1024); 
     ~SSSPGPUTreeBenchmark();
 
     void set_epoch_kernel(sssp_gpu_epoch_func epoch_kernel_);

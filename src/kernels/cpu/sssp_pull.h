@@ -31,6 +31,7 @@ segment_res_t sssp_pull_cpu(const CSRWGraph &g,
     res.start_id   = 0;
     res.end_id     = g.num_nodes;
     res.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
+    res.num_edges = g.num_edges;
 
     // Start kernel.
     std::cout << "Starting kernel ..." << std::endl;
@@ -68,8 +69,6 @@ segment_res_t sssp_pull_cpu(const CSRWGraph &g,
         total_time += timer.Millisecs();
     }
     // Save results.
-    std::cout << total_epochs << std::endl;
-    res.num_edges = (total_epochs / BENCHMARK_TIME_ITERS) * g.num_edges;
     res.millisecs = total_time / BENCHMARK_TIME_ITERS;
     res.gteps     = res.num_edges / (res.millisecs / 1000) / 1e9;
 

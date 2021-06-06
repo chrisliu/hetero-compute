@@ -11,14 +11,25 @@
 #include "../../src/kernels/cpu/sssp_pull.h"
 #include "../../src/kernels/gpu/sssp_pull.cuh"
 
-#define DEPTH 3
+// Only get results for a particular depth (not the whole tree).
+#define ONLY_LAYER
+// Print results to std::cout.
+#define PRINT_RESULTS
+// Save results to YAML files.
+#define SAVE_RESULTS
+// Current/Up to (inclusive) this depth.
+#define DEPTH 4
 
+#ifdef SAVE_RESULTS
+template <typename ResT>
 __inline__
-void save_results(std::string filename, tree_res_t &result) {
+void save_results(std::string filename, ResT &result) {
     std::ofstream ofs(filename, std::ofstream::out);
     ofs << result;
     ofs.close();
 }
+
+#endif // SAVE_RESULTS
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -38,35 +49,62 @@ int main(int argc, char *argv[]) {
 
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
-    /*// Run CPU epoch kernel.*/
-    /*{*/
-        /*SSSPCPUTreeBenchmark bench(&g, epoch_sssp_pull_cpu);*/
+    // Run CPU epoch kernel.
+    {
+        SSSPCPUTreeBenchmark bench(&g, epoch_sssp_pull_cpu);
 
-        /*tree_res_t res = bench.tree_microbenchmark(DEPTH);*/
+#ifdef ONLY_LAYER
+        auto res = bench.layer_microbenchmark(DEPTH);
+#else
+        auto res = bench.tree_microbenchmark(DEPTH);
+#endif // ONLY_LAYER
         
-        /*[>std::cout << res;<]*/
-        /*save_results("sssp_cpu.yaml", res);*/
-    /*}*/
+#ifdef PRINT_RESULTS
+        std::cout << res;
+#endif // PRINT_RESULTS
 
-    /*// Run naive epoch kernel.*/
-    /*{*/
-        /*SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_naive);*/
+#ifdef SAVE_RESULTS
+        save_results("sssp_cpu.yaml", res);
+#endif // SAVE_RESULTS
+    }
+
+    // Run naive epoch kernel.
+    {
+        SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_naive);
         
-        /*tree_res_t res = bench.tree_microbenchmark(DEPTH);*/
+#ifdef ONLY_LAYER
+        auto res = bench.layer_microbenchmark(DEPTH);
+#else
+        auto res = bench.tree_microbenchmark(DEPTH);
+#endif // ONLY_LAYER
 
-        /*[>std::cout << res;<]*/
-        /*save_results("sssp_gpu_naive.yaml", res);*/
-    /*}*/
+#ifdef PRINT_RESULTS
+        std::cout << res;
+#endif // PRINT_RESULTS
 
-    /*// Run warp min epoch kernel.*/
-    /*{*/
-        /*SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_warp_min);*/
+#ifdef SAVE_RESULTS
+        save_results("sssp_gpu_naive.yaml", res);
+#endif // SAVE_RESULTS
+    }
+
+    // Run warp min epoch kernel.
+    {
+        SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_warp_min);
         
-        /*tree_res_t res = bench.tree_microbenchmark(DEPTH);*/
+#ifdef ONLY_LAYER
+        auto res = bench.layer_microbenchmark(DEPTH);
+#else
+        auto res = bench.tree_microbenchmark(DEPTH);
+#endif // ONLY_LAYER
 
-        /*[>std::cout << res;<]*/
-        /*save_results("sssp_gpu_warp_min.yaml", res);*/
-    /*}*/
+#ifdef PRINT_RESULTS
+        std::cout << res;
+#endif // PRINT_RESULTS
+
+#ifdef SAVE_RESULTS
+        save_results("sssp_gpu_warp_min.yaml", res);
+#endif // SAVE_RESULTS
+    }
 
     weight_t *ret_dist = nullptr;
 

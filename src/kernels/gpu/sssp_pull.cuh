@@ -70,6 +70,7 @@ segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel
     res.start_id   = 0;
     res.end_id     = g.num_nodes;
     res.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
+    res.num_edges = g.num_edges;
 
     // Actual kernel run.
     std::cout << "Starting kernel ..." << std::endl;
@@ -89,8 +90,8 @@ segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel
 
             // Note: Must run with thread count >= 32 since warp level
             //       synchronization is performed.
-            (*epoch_kernel)<<<64, 1024>>>(cu_index, cu_neighbors, 0,
-                    g.num_nodes, cu_dist, cu_updated);
+            (*epoch_kernel)<<<block_count, thread_count>>>(cu_index, 
+                    cu_neighbors, 0, g.num_nodes, cu_dist, cu_updated);
 
             CUDA_ERRCHK(cudaMemcpy(&updated, cu_updated, sizeof(nid_t),
                     cudaMemcpyDeviceToHost));
@@ -103,10 +104,10 @@ segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel
     }
 
     // Save results.
-    std::cout << total_epochs << std::endl;
-    res.num_edges = (total_epochs / BENCHMARK_TIME_ITERS) * g.num_edges;
     res.millisecs = total_time / BENCHMARK_TIME_ITERS;
     res.gteps     = res.num_edges / (res.millisecs / 1000) / 1e9;
+    
+    std::cout << g.num_edges;
 
     std::cout << "Kernel completed in (avg): " << res.millisecs << " ms." 
         << std::endl;
@@ -130,6 +131,81 @@ segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel
 
 /**
  * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
+ * Each block is assigned to a single node. To compute min distance, a 
+ * block-level min is executed.
+ *
+ * Conditions:
+ *   - blockDim.x % warpSize == 0 (i.e., number of threads per block is some 
+ *                                 multiple of the warp size).
+ * Parameters:
+ *   - index     <- graph index returned by deconstruct_wgraph().
+ *   - neighbors <- graph neighbors returned by deconstruct_wgraph().
+ *   - start_id  <- starting node id.
+ *   - end_id    <- ending node id (exclusive).
+ *   - dist      <- input distance and output distances computed this epoch.
+ *   - updated   <- global counter on number of nodes updated.
+ */
+/*__global__ */
+/*void epoch_sssp_pull_gpu_warp_min(const offset_t *index, */
+        /*const wnode_t *neighbors, const nid_t start_id, const nid_t end_id, */
+        /*weight_t *dist, nid_t *updated*/
+/*) {*/
+    /*extern __shared__ weight_t block_dists[];*/
+
+    /*int tid         = blockIdx.x * blockDim.x + threadIdx.x;*/
+    /*int warpid      = tid % warpSize; // ID within a warp.*/
+    /*int num_threads = gridDim.x * blockDim.x;*/
+
+    /*nid_t local_updated = 0;*/
+
+    /*for (int nid = start_id + blockIdx.x; nid < end_id; nid += gridDim.x) {*/
+        /*weight_t new_dist = dist[nid];*/
+
+        /*// Find shortest candidate distance.*/
+        /*for (int i = index[nid] + threadIdx.x; i < index[nid + 1]; */
+                /*i += blockDim.x*/
+        /*) {*/
+            /*weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;*/
+            /*new_dist = min(prop_dist, new_dist);*/
+        /*}*/
+
+        /*// Warp-level min.*/
+        /*new_dist = warp_min(new_dist);*/
+
+        /*// Block-level min.*/
+        /*if (warpid == 0) {*/
+            /*int block_warp_id = threadIdx.x / warpSize;*/
+            /*block_dists[block_warp_id] = new_dist;*/
+            /*__sync_threads();*/
+
+            /*for (int strd = blockDim.x / warpSize / 2; strd >= 1; strd >>= 1) {*/
+                /*if (block_warp_id < strd) {*/
+                    /*block_dists[block_warp_id] = min(block_dists[block_warp_id],*/
+                            /*block_dists[block_warp_id + strd])*/
+                /*}*/
+                /*__sync_threads();*/
+            /*}*/
+        /*}*/
+
+        /*// Update distance if applicable.*/
+        /*if (threadIdx.x == 0 and block_dists[0] != dist[nid]) {*/
+            /*dist[nid] == block_dist[0];*/
+            /*local_updated++;*/
+        /*}*/
+    /*}*/
+
+    /*// Push update count.*/
+    /*atomicAdd(updated, local_updated);*/
+/*}*/
+
+/**
+ * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
+ * Each warp is assigned to a single node. To compute min distance, a warp-level
+ * min is executed.
+ *
+ * Conditions:
+ *   - blockDim.x % warpSize == 0 (i.e., number of threads per block is some 
+ *                                 multiple of the warp size).
  * Parameters:
  *   - index     <- graph index returned by deconstruct_wgraph().
  *   - neighbors <- graph neighbors returned by deconstruct_wgraph().
@@ -139,8 +215,9 @@ segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__ 
-void epoch_sssp_pull_gpu_warp_min(const offset_t *index, const wnode_t *neighbors, 
-        const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
+void epoch_sssp_pull_gpu_warp_min(const offset_t *index, 
+        const wnode_t *neighbors, const nid_t start_id, 
+        const nid_t end_id, weight_t *dist, nid_t *updated
 ) {
     int tid         = blockIdx.x * blockDim.x + threadIdx.x;
     int warpid      = tid % warpSize; // ID within a warp.
@@ -174,6 +251,8 @@ void epoch_sssp_pull_gpu_warp_min(const offset_t *index, const wnode_t *neighbor
 
 /**
  * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
+ * Each thread is assigned to a single node.
+ *
  * Parameters:
  *   - index     <- graph index returned by deconstruct_wgraph().
  *   - neighbors <- graph neighbors returned by deconstruct_wgraph().

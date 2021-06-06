@@ -9,6 +9,8 @@
 #define BENCHMARK_WARMUP_ITERS 5
 // Number of rounds to average.
 #define BENCHMARK_TIME_ITERS 5
+// Output precision.
+#define BENCHMARK_PRECISION 10
 
 #include <iomanip>
 #include <omp.h>
@@ -25,33 +27,35 @@
  * Results for a particular segment of nodes.
  */
 typedef struct {
-    nid_t  start_id;   // Starting node id.
-    nid_t  end_id;     // Ending node id (exclusive).
-    float  avg_degree; // Average degree of segment.
-    double num_edges;  // Total number of edges traversed.
-    double millisecs;  // Execution time.  
-    double gteps;      // GTEPS.
+    nid_t    start_id;            // Starting node id.
+    nid_t    end_id;              // Ending node id (exclusive).
+    float    avg_degree;          // Average degree of segment.
+    offset_t num_edges;           // Total number of edges in this subgraph. 
+    double   millisecs;           // Execution time.  
+    double   gteps;               // GTEPS.
 } segment_res_t;
 
 /**
  * Results for a particular decomposition of nodes.
  */
 typedef struct {
-    segment_res_t *segments;    // Benchmarked segments for this layer.
-    nid_t         num_segments; // Number of segments this layer.
+    segment_res_t *segments;      // Benchmarked segments for this layer.
+    nid_t         num_segments;   // Number of segments this layer.
+    int           depth;          // Depth of this current layer.
 } layer_res_t;
 
 /**
  * Results for a tree decomposition of nodes.
  */
 typedef struct {
-    layer_res_t *layers; // Benchmarked layers for this tree.
-    int         num_layers;  // Number of layers in this tree.
+    layer_res_t *layers;          // Benchmarked layers for this tree.
+    int         num_layers;       // Number of layers in this tree.
 } tree_res_t;
 
 // YAML generators.
-std::ostream& operator<<(std::ostream &os, const segment_res_t &res);
-std::ostream& operator<<(std::ostream &os, const tree_res_t &res);
+std::ostream &operator<<(std::ostream &os, const segment_res_t &res);
+std::ostream &operator<<(std::ostream &os, const layer_res_t &res);
+std::ostream &operator<<(std::ostream &os, const tree_res_t &res);
 
 /******************************************************************************
  ***** Microbenchmark Classes *************************************************
@@ -100,7 +104,7 @@ protected:
  * Writer for single segment result. Emits valid YAML.
  */
 std::ostream& operator<<(std::ostream &os, const segment_res_t &res) {
-    os << std::setprecision(10)
+    os << std::setprecision(BENCHMARK_PRECISION)
        << "results:" << std::endl
        << "  - start: " << res.start_id << std::endl
        << "    end: " << res.end_id << std::endl
@@ -108,6 +112,28 @@ std::ostream& operator<<(std::ostream &os, const segment_res_t &res) {
        << "    num_edges: " << res.num_edges << std::endl
        << "    millis: " << res.millisecs << std::endl
        << "    gteps: " << res.gteps << std::endl;
+
+    return os;
+}
+
+/**
+ * Writer fro a layer of results. Emits valid YAML.
+ */
+std::ostream &operator<<(std::ostream &os, const layer_res_t &res) {
+    os << std::setprecision(BENCHMARK_PRECISION)
+       << "results:" << std::endl
+       << "  - depth: " << res.depth << std::endl
+       << "    segments: " << std::endl;
+    
+    for (int seg = 0; seg < res.num_segments; seg++) {
+        segment_res_t cur_seg = res.segments[seg];        
+        os << "      - start: " << cur_seg.start_id << std::endl
+           << "        end: " << cur_seg.end_id << std::endl
+           << "        avg_deg: " << cur_seg.avg_degree << std::endl
+           << "        num_edges: " << cur_seg.num_edges << std::endl
+           << "        millis: " << cur_seg.millisecs << std::endl
+           << "        gteps: " << cur_seg.gteps << std::endl;
+    }
 
     return os;
 }
@@ -122,7 +148,7 @@ std::ostream& operator<<(std::ostream &os, const tree_res_t &res) {
            << "    segments:" << std::endl;
         for (int seg = 0; seg < res.layers[depth].num_segments; seg++) {
             segment_res_t cur_seg = res.layers[depth].segments[seg];
-            os << std::setprecision(10)
+            os << std::setprecision(BENCHMARK_PRECISION)
                << "      - start: " << cur_seg.start_id << std::endl
                << "        end: " << cur_seg.end_id << std::endl
                << "        avg_deg: " << cur_seg.avg_degree << std::endl
@@ -177,7 +203,7 @@ layer_res_t TreeBenchmark::layer_microbenchmark(const int depth) {
     nid_t num_segments = 1 << depth;
 
     // Init results.
-    layer_res_t results = { nullptr, num_segments };
+    layer_res_t results = { nullptr, num_segments, depth };
     results.segments = new segment_res_t[num_segments]; 
 
     // g->num_nodes is always divisible by 2.
