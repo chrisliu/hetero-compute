@@ -106,8 +106,6 @@ segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel
     // Save results.
     res.millisecs = total_time / BENCHMARK_TIME_ITERS;
     res.gteps     = res.num_edges / (res.millisecs / 1000) / 1e9;
-    
-    std::cout << g.num_edges;
 
     std::cout << "Kernel completed in (avg): " << res.millisecs << " ms." 
         << std::endl;
