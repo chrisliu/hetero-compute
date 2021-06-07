@@ -106,11 +106,17 @@ int main(int argc, char *argv[]) {
 #endif // SAVE_RESULTS
     }
 
-    weight_t *ret_dist = nullptr;
+    weight_t *ret_dist  = nullptr;
+    weight_t *init_dist = new weight_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        init_dist[i] = MAX_WEIGHT;
+    init_dist[0] = 0; // Arbitrarily set highest degree node to source.
 
-    // Run CPU kernel. 
+    // Run CPU kernel.
     {
-        segment_res_t res = sssp_pull_cpu(g, epoch_sssp_pull_cpu, &ret_dist);
+        segment_res_t res = benchmark_sssp_cpu(g, epoch_sssp_pull_cpu,
+                init_dist, &ret_dist);
 
         std::cout << res;
 
@@ -119,8 +125,8 @@ int main(int argc, char *argv[]) {
 
     // Run naive kernel.
     {
-        segment_res_t res = sssp_pull_gpu(g, epoch_sssp_pull_gpu_naive, 
-                &ret_dist);
+        segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_naive,
+                init_dist, &ret_dist);
 
         std::cout << res;
 
@@ -129,13 +135,15 @@ int main(int argc, char *argv[]) {
 
     // Run warp min kernel.
     {
-        segment_res_t res = sssp_pull_gpu(g, epoch_sssp_pull_gpu_warp_min, 
-                &ret_dist);
+        segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_warp_min,
+                init_dist, &ret_dist);
 
         std::cout << res;
 
         delete[] ret_dist;
     }
+
+    delete[] init_dist;
 
     return EXIT_SUCCESS;
 }

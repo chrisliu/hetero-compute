@@ -11,7 +11,7 @@ benchmark_sssp.exe: sssp_benchmark.cu
 
 .HONY: test
 test: benchmark_sssp.exe
-	./benchmark_sssp.exe graph.wsg 
+	./benchmark_sssp.exe ../../graphs/graph_scale23_degree16.wsg 
 
 .PHONY: clean
 clean:

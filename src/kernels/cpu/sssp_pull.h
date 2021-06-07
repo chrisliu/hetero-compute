@@ -11,75 +11,57 @@
 #include "../kernel_types.h"
 #include "../../graph.h"
 #include "../../util.h"
-#include "../../benchmarks/benchmark.h"
+
+/******************************************************************************
+ ***** SSSP Kernels ***********************************************************
+ ******************************************************************************/
 
 /**
- * Runs SSSP kernel on CPU. Synchronization occurs in serial.
+ * Runs SSSP kernel on CPU in parallel. Synchronization occurs in serial.
  * Parameters:
- *   - g        <- graph.
- *   - ret_dist <- pointer to the address of the return distance array.
+ *   - g            <- graph.
+ *   - epoch_kernel <- cpu epoch kernel.
+ *   - init_dist    <- initial distance array.
+ *   - ret_dist     <- pointer to the address of the return distance array.
+ * Returns:
+ *   Execution time in milliseconds.
  */
-segment_res_t sssp_pull_cpu(const CSRWGraph &g, 
-        sssp_cpu_epoch_func epoch_kernel, weight_t **ret_dist
+double sssp_pull_cpu(const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel, 
+        const weight_t *init_dist, weight_t **ret_dist
 ) {
-    // Setup.
+    // Setup computed distances.
     weight_t *dist = new weight_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        dist[i] = init_dist[i];
 
+    nid_t updated = 1;
 
-    // Return data structure.
-    segment_res_t res;
-    res.start_id   = 0;
-    res.end_id     = g.num_nodes;
-    res.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
-    res.num_edges = g.num_edges;
+    // Start kernel!
+    Timer timer; timer.Start();
+    while (updated != 0) {
+        updated = 0;
 
-    // Start kernel.
-    std::cout << "Starting kernel ..." << std::endl;
-
-    double total_epochs = 0.0;
-    double total_time   = 0.0;
-
-    for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
-        #pragma omp parallel for
-        for (int i = 0; i < g.num_nodes; i++)
-            dist[i] = MAX_WEIGHT;
-
-        // Arbitrary: Set highest degree node as source.
-        dist[0] = 0;
-
-        nid_t updated = 1;
-
-        Timer timer; timer.Start();
-        while (updated != 0) {
-            updated = 0;
-
-            #pragma omp parallel
-            {
-                (*epoch_kernel)(g, dist, 0, g.num_nodes, omp_get_thread_num(), 
-                        omp_get_num_threads(), updated);
-            }
-
-            // Implicit OMP BARRIER here (see "implicit barrier at end of 
-            // parallel region").
-
-            total_epochs++;
+        #pragma omp parallel
+        {
+            (*epoch_kernel)(g, dist, 0, g.num_nodes, omp_get_thread_num(), 
+                    omp_get_num_threads(), updated);
         }
-        timer.Stop();
 
-        total_time += timer.Millisecs();
+        // Implicit OMP BARRIER here (see "implicit barrier at end of 
+        // parallel region").
     }
-    // Save results.
-    res.millisecs = total_time / BENCHMARK_TIME_ITERS;
-    res.gteps     = res.num_edges / (res.millisecs / 1000) / 1e9;
-
-    std::cout << "Kernel completed in (avg): " << res.millisecs << " ms." 
-        << std::endl;
+    timer.Stop();
 
     // Assign output.
     *ret_dist = dist;
 
-    return res;
+    return timer.Millisecs();
 }
+
+/******************************************************************************
+ ***** Epoch Kernels **********************************************************
+ ******************************************************************************/
 
 /**
  * Runs SSSP pull on CPU for one epoch.

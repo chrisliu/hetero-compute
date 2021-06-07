@@ -11,6 +11,11 @@
 #include "../graph.h"
 #include "../util.h"
 #include "../kernels/kernel_types.h"
+#include "../kernels/cpu/sssp_pull.h"
+
+/******************************************************************************
+ ***** Benchmarks *************************************************************
+ ******************************************************************************/
 
 class SSSPCPUTreeBenchmark : public SSSPTreeBenchmark {
 public:
@@ -23,8 +28,22 @@ protected:
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
 };
 
+/**
+ * Benchmarks a full SSSP CPU run.
+ * Parameters:
+ *   - g <- graph.
+ *   - epoch_kernel <- cpu epoch_kernel.
+ *   - init_dist <- initial distance array.
+ *   - ret_dist <- pointer to the address of the return distance array.
+ * Returns:
+ *   Execution results.
+ */
+segment_res_t benchmark_sssp_cpu(const CSRWGraph &g, 
+        sssp_cpu_epoch_func epoch_kernel,
+        const weight_t *init_dist, weight_t **ret_dist);
+
 /******************************************************************************
- ***** Microbenchmark Implementations *****************************************
+ ***** Benchmark Implementations **********************************************
  ******************************************************************************/
 
 SSSPCPUTreeBenchmark::SSSPCPUTreeBenchmark(const CSRWGraph *g_,
@@ -67,6 +86,33 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(const nid_t start_id,
 
         // Save time.
         total_time += timer.Millisecs();
+    }
+
+    // Save results.
+    result.millisecs = total_time / BENCHMARK_TIME_ITERS;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9;
+
+    return result;
+}
+
+segment_res_t benchmark_sssp_cpu(const CSRWGraph &g, 
+        sssp_cpu_epoch_func epoch_kernel,
+        const weight_t *init_dist, weight_t **ret_dist
+) {
+    // Initialize results and calculate segment properties.
+    segment_res_t result;
+    result.start_id   = 0;
+    result.end_id     = g.num_nodes;
+    result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
+    result.num_edges  = g.num_edges;
+
+    // Run kernel!
+    double total_time = 0.0;
+    for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
+        total_time += sssp_pull_cpu(g, epoch_kernel, init_dist, ret_dist);
+
+        if (iter != BENCHMARK_TIME_ITERS - 1)
+            delete[] (*ret_dist);
     }
 
     // Save results.

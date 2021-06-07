@@ -12,7 +12,6 @@
 #include "../../cuda.cuh"
 #include "../../graph.h"
 #include "../../util.h"
-#include "../../benchmarks/benchmark.h"
 
 /** Forward decl. */
 __global__ 
@@ -27,17 +26,22 @@ void epoch_sssp_pull_gpu_naive(const offset_t *index, const wnode_t *neighbors,
 /**
  * Runs SSSP kernel on GPU. Synchronization occurs in serial.
  * Parameters:
- *   - g        <- graph.
- *   - ret_dist <- pointer to the address of the return distance array.
+ *   - g            <- graph.
+ *   - epoch_kernel <- gpu epoch kernel.
+ *   - init_dist    <- initial distance array.
+ *   - ret_dist     <- pointer to the address of the return distance array.
+ *   - block_count  <- (optional) number of blocks.
+ *   - thread_count <- (optional) number of threads.
  * Returns:
- *   Execution results for the entire graph.
+ *   Execution time in millisecods.
  */
-segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel, 
-        weight_t **ret_dist, int block_count = 64, int thread_count = 1024
+double sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel, 
+        const weight_t *init_dist, weight_t **ret_dist, 
+        int block_count = 64, int thread_count = 1024
 ) {
-    CONDCHK(epoch_kernel != epoch_sssp_pull_gpu_naive and thread_count < 32, 
-            "thread count must be greater or equal warp size")
-    /// Setup.
+    CONDCHK(epoch_kernel != epoch_sssp_pull_gpu_naive and thread_count % 32 != 0, 
+            "thread count must be divisible by 32")
+
     // Copy graph.
     offset_t *cu_index      = nullptr;
     wnode_t  *cu_neighbors  = nullptr;
@@ -49,66 +53,38 @@ segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel
             cudaMemcpyHostToDevice));
     CUDA_ERRCHK(cudaMemcpy(cu_neighbors, g.neighbors, neighbors_size, 
             cudaMemcpyHostToDevice));
-
-    // Update counter.
-    nid_t *cu_updated = nullptr;
-    CUDA_ERRCHK(cudaMalloc((void **) &cu_updated, sizeof(nid_t)));
     
     // Distance.
     weight_t *dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-        dist[i] = MAX_WEIGHT;
-    dist[0] = 0; // Arbitrarily set start.
+        dist[i] = init_dist[i];
 
     weight_t *cu_dist = nullptr;
     size_t dist_size = g.num_nodes * sizeof(weight_t);
     CUDA_ERRCHK(cudaMalloc((void **) &cu_dist, dist_size));
 
-    // Return data structure.
-    segment_res_t res;
-    res.start_id   = 0;
-    res.end_id     = g.num_nodes;
-    res.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
-    res.num_edges = g.num_edges;
+    // Update counter.
+    nid_t updated     = 1;
+    nid_t *cu_updated = nullptr;
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_updated, sizeof(nid_t)));
+    CUDA_ERRCHK(cudaMemcpy(cu_dist, dist, dist_size, 
+            cudaMemcpyHostToDevice));
 
-    // Actual kernel run.
-    std::cout << "Starting kernel ..." << std::endl;
-    
-    double total_epochs = 0.0;
-    double total_time   = 0.0;
+    // Start kernel!
+    Timer timer; timer.Start();
+    while (updated != 0) {
+        CUDA_ERRCHK(cudaMemset(cu_updated, 0, sizeof(nid_t)));
 
-    for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
-        // Reset updated counter and distances.
-        nid_t updated = 1;
-        CUDA_ERRCHK(cudaMemcpy(cu_dist, dist, dist_size, 
-                cudaMemcpyHostToDevice));
+        // Note: Must run with thread count % 32 == 0 since warp level
+        //       synchronization could performed.
+        (*epoch_kernel)<<<block_count, thread_count>>>(cu_index, 
+                cu_neighbors, 0, g.num_nodes, cu_dist, cu_updated);
 
-        Timer timer; timer.Start();
-        while (updated != 0) {
-            CUDA_ERRCHK(cudaMemset(cu_updated, 0, sizeof(nid_t)));
-
-            // Note: Must run with thread count >= 32 since warp level
-            //       synchronization is performed.
-            (*epoch_kernel)<<<block_count, thread_count>>>(cu_index, 
-                    cu_neighbors, 0, g.num_nodes, cu_dist, cu_updated);
-
-            CUDA_ERRCHK(cudaMemcpy(&updated, cu_updated, sizeof(nid_t),
-                    cudaMemcpyDeviceToHost));
-
-            total_epochs++;
-        }
-        timer.Stop();
-        
-        total_time += timer.Millisecs();
+        CUDA_ERRCHK(cudaMemcpy(&updated, cu_updated, sizeof(nid_t),
+                cudaMemcpyDeviceToHost));
     }
-
-    // Save results.
-    res.millisecs = total_time / BENCHMARK_TIME_ITERS;
-    res.gteps     = res.num_edges / (res.millisecs / 1000) / 1e9;
-
-    std::cout << "Kernel completed in (avg): " << res.millisecs << " ms." 
-        << std::endl;
+    timer.Stop();
 
     // Copy distances.
     CUDA_ERRCHK(cudaMemcpy(dist, cu_dist, dist_size, cudaMemcpyDeviceToHost));
@@ -120,7 +96,7 @@ segment_res_t sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel
     CUDA_ERRCHK(cudaFree(cu_updated));
     CUDA_ERRCHK(cudaFree(cu_dist));
 
-    return res;
+    return timer.Millisecs();
 }
 
 /******************************************************************************
