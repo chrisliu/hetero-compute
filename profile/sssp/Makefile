@@ -6,8 +6,8 @@ CXX             = $(CPP_COMPILER) $(CPP_FLAGS) -Xcompiler ${CROSS_CPP_FLAGS}
 .PHONY: all
 all: benchmark_sssp.exe
 
-benchmark_sssp.exe: sssp_benchmark.cu
-	$(CXX) sssp_benchmark.cu -o benchmark_sssp.exe
+benchmark_sssp.exe: benchmark_sssp.cu
+	$(CXX) benchmark_sssp.cu -o benchmark_sssp.exe
 
 .HONY: test
 test: benchmark_sssp.exe

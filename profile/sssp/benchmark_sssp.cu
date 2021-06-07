@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
     weight_t *init_dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-        init_dist[i] = MAX_WEIGHT;
+        init_dist[i] = INF_WEIGHT;
     init_dist[0] = 0; // Arbitrarily set highest degree node to source.
 
     // Run CPU kernel.
