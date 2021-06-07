@@ -5,7 +5,6 @@
 #ifndef SRC_BENCHMARKS__GPU_BENCHMARK_CUH
 #define SRC_BENCHMARKS__GPU_BENCHMARK_CUH
 
-#include <omp.h>
 #include <random>
 
 #include "benchmark.h"
@@ -19,7 +18,8 @@
  */
 class SSSPGPUTreeBenchmark : public SSSPTreeBenchmark {
 public:
-    SSSPGPUTreeBenchmark(const CSRWGraph *g_, sssp_gpu_epoch_func epoch_kernel_,
+    SSSPGPUTreeBenchmark(
+            const CSRWGraph *g_, sssp_gpu_epoch_func epoch_kernel_,
             const int block_count_ = 64, const int thread_count_ = 1024); 
     ~SSSPGPUTreeBenchmark();
 
@@ -43,14 +43,17 @@ protected:
 /**
  * Benchmarks a full SSSP GPU run.
  * Parameters:
- *   - g <- graph.
+ *   - g            <- graph.
  *   - epoch_kernel <- cpu epoch_kernel.
- *   - init_dist <- initial distance array.
- *   - ret_dist <- pointer to the address of the return distance array.
+ *   - init_dist    <- initial distance array.
+ *   - ret_dist     <- pointer to the address of the return distance array.
+ *   - block_count  <- (optional) number of blocks.
+ *   - thread_count <- (optional) number of threads.
  * Returns:
  *   Execution results.
  */
-segment_res_t benchmark_sssp_gpu(const CSRWGraph &g, 
+segment_res_t benchmark_sssp_gpu(
+        const CSRWGraph &g, 
         sssp_gpu_epoch_func epoch_kernel,
         const weight_t *init_dist, weight_t **ret_dist,
         int block_size = 64, int thread_count = 1024);
@@ -59,8 +62,8 @@ segment_res_t benchmark_sssp_gpu(const CSRWGraph &g,
  ***** Microbenchmark Implementations *****************************************
  ******************************************************************************/
 
-SSSPGPUTreeBenchmark::SSSPGPUTreeBenchmark(const CSRWGraph *g_,
-        sssp_gpu_epoch_func epoch_kernel_,
+SSSPGPUTreeBenchmark::SSSPGPUTreeBenchmark(
+        const CSRWGraph *g_, sssp_gpu_epoch_func epoch_kernel_,
         const int block_count_, const int thread_count_)
     : SSSPTreeBenchmark(g_)
     , epoch_kernel(epoch_kernel_)
@@ -108,8 +111,8 @@ void SSSPGPUTreeBenchmark::set_epoch_kernel(sssp_gpu_epoch_func epoch_kernel_) {
  * Returns:
  *   result segment data structure.
  */
-segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
-        const nid_t end_id
+segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
+        const nid_t start_id, const nid_t end_id
 ) {
     // Initialize results and calculate segment properties.
     segment_res_t result;
@@ -158,7 +161,8 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
     return result;
 }
 
-segment_res_t benchmark_sssp_gpu(const CSRWGraph &g, 
+segment_res_t benchmark_sssp_gpu(
+        const CSRWGraph &g, 
         sssp_gpu_epoch_func epoch_kernel,
         const weight_t *init_dist, weight_t **ret_dist,
         int block_size, int thread_count
@@ -185,7 +189,6 @@ segment_res_t benchmark_sssp_gpu(const CSRWGraph &g,
     result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9;
 
     return result;
-
 }
 
 #endif // SRC_BENCHMARKS__GPU_BENCHMARK_CUH

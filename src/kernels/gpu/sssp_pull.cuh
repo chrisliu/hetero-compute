@@ -15,7 +15,8 @@
 
 /** Forward decl. */
 __global__ 
-void epoch_sssp_pull_gpu_naive(const offset_t *index, const wnode_t *neighbors, 
+void epoch_sssp_pull_gpu_naive(
+        const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
 );
 
@@ -33,14 +34,15 @@ void epoch_sssp_pull_gpu_naive(const offset_t *index, const wnode_t *neighbors,
  *   - block_count  <- (optional) number of blocks.
  *   - thread_count <- (optional) number of threads.
  * Returns:
- *   Execution time in millisecods.
+ *   Execution time in milliseconds.
  */
-double sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel, 
-        const weight_t *init_dist, weight_t **ret_dist, 
+double sssp_pull_gpu(
+        const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel, 
+        const weight_t *init_dist, weight_t ** const ret_dist, 
         int block_count = 64, int thread_count = 1024
 ) {
     CONDCHK(epoch_kernel != epoch_sssp_pull_gpu_naive and thread_count % 32 != 0, 
-            "thread count must be divisible by 32")
+            "thread count must be divisible by 32");
 
     // Copy graph.
     offset_t *cu_index      = nullptr;
@@ -63,21 +65,19 @@ double sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel,
     weight_t *cu_dist = nullptr;
     size_t dist_size = g.num_nodes * sizeof(weight_t);
     CUDA_ERRCHK(cudaMalloc((void **) &cu_dist, dist_size));
+    CUDA_ERRCHK(cudaMemcpy(cu_dist, dist, dist_size, 
+            cudaMemcpyHostToDevice));
 
     // Update counter.
     nid_t updated     = 1;
     nid_t *cu_updated = nullptr;
     CUDA_ERRCHK(cudaMalloc((void **) &cu_updated, sizeof(nid_t)));
-    CUDA_ERRCHK(cudaMemcpy(cu_dist, dist, dist_size, 
-            cudaMemcpyHostToDevice));
 
     // Start kernel!
     Timer timer; timer.Start();
     while (updated != 0) {
         CUDA_ERRCHK(cudaMemset(cu_updated, 0, sizeof(nid_t)));
 
-        // Note: Must run with thread count % 32 == 0 since warp level
-        //       synchronization could performed.
         (*epoch_kernel)<<<block_count, thread_count>>>(cu_index, 
                 cu_neighbors, 0, g.num_nodes, cu_dist, cu_updated);
 
@@ -122,8 +122,9 @@ double sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel,
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__
-void epoch_sssp_pull_gpu_block_min(const offset_t *index,
-        const wnode_t *neighbors, const nid_t start_id, const nid_t end_id,
+void epoch_sssp_pull_gpu_block_min(
+        const offset_t *index, const wnode_t *neighbors, 
+        const nid_t start_id, const nid_t end_id,
         weight_t *dist, nid_t *updated
 ) {
     __shared__ weight_t block_dist[32];
@@ -185,9 +186,10 @@ void epoch_sssp_pull_gpu_block_min(const offset_t *index,
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__ 
-void epoch_sssp_pull_gpu_warp_min(const offset_t *index, 
-        const wnode_t *neighbors, const nid_t start_id, 
-        const nid_t end_id, weight_t *dist, nid_t *updated
+void epoch_sssp_pull_gpu_warp_min(
+        const offset_t *index, const wnode_t *neighbors, 
+        const nid_t start_id, const nid_t end_id, 
+        weight_t *dist, nid_t *updated
 ) {
     int tid         = blockIdx.x * blockDim.x + threadIdx.x;
     int warpid      = tid % warpSize; // ID within a warp.
@@ -233,8 +235,10 @@ void epoch_sssp_pull_gpu_warp_min(const offset_t *index,
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__ 
-void epoch_sssp_pull_gpu_naive(const offset_t *index, const wnode_t *neighbors, 
-        const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
+void epoch_sssp_pull_gpu_naive(
+        const offset_t *index, const wnode_t *neighbors, 
+        const nid_t start_id, const nid_t end_id, 
+        weight_t *dist, nid_t *updated
 ) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int num_threads = gridDim.x * blockDim.x;

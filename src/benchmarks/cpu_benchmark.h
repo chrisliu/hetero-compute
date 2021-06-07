@@ -19,8 +19,8 @@
 
 class SSSPCPUTreeBenchmark : public SSSPTreeBenchmark {
 public:
-    SSSPCPUTreeBenchmark(const CSRWGraph *g_, 
-            sssp_cpu_epoch_func epoch_kernel_);
+    SSSPCPUTreeBenchmark(
+            const CSRWGraph *g_, sssp_cpu_epoch_func epoch_kernel_);
 
 protected:
     sssp_cpu_epoch_func epoch_kernel; // CPU epoch kernel.
@@ -31,14 +31,15 @@ protected:
 /**
  * Benchmarks a full SSSP CPU run.
  * Parameters:
- *   - g <- graph.
+ *   - g            <- graph.
  *   - epoch_kernel <- cpu epoch_kernel.
- *   - init_dist <- initial distance array.
- *   - ret_dist <- pointer to the address of the return distance array.
+ *   - init_dist    <- initial distance array.
+ *   - ret_dist     <- pointer to the address of the return distance array.
  * Returns:
  *   Execution results.
  */
-segment_res_t benchmark_sssp_cpu(const CSRWGraph &g, 
+segment_res_t benchmark_sssp_cpu(
+        const CSRWGraph &g, 
         sssp_cpu_epoch_func epoch_kernel,
         const weight_t *init_dist, weight_t **ret_dist);
 
@@ -46,14 +47,14 @@ segment_res_t benchmark_sssp_cpu(const CSRWGraph &g,
  ***** Benchmark Implementations **********************************************
  ******************************************************************************/
 
-SSSPCPUTreeBenchmark::SSSPCPUTreeBenchmark(const CSRWGraph *g_,
-        sssp_cpu_epoch_func epoch_kernel_)
+SSSPCPUTreeBenchmark::SSSPCPUTreeBenchmark(
+        const CSRWGraph *g_, sssp_cpu_epoch_func epoch_kernel_)
     : SSSPTreeBenchmark(g_)
     , epoch_kernel(epoch_kernel_)
 {}
 
-segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(const nid_t start_id,
-        const nid_t end_id
+segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(
+        const nid_t start_id, const nid_t end_id
 ) {
     // Initialize results and calculate segment properties.
     segment_res_t result;
@@ -95,8 +96,8 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(const nid_t start_id,
     return result;
 }
 
-segment_res_t benchmark_sssp_cpu(const CSRWGraph &g, 
-        sssp_cpu_epoch_func epoch_kernel,
+segment_res_t benchmark_sssp_cpu(
+        const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel,
         const weight_t *init_dist, weight_t **ret_dist
 ) {
     // Initialize results and calculate segment properties.

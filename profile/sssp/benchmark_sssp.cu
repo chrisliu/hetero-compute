@@ -8,6 +8,7 @@
 #include "../../src/util.h"
 #include "../../src/benchmarks/gpu_benchmark.cuh"
 #include "../../src/benchmarks/cpu_benchmark.h"
+#include "../../src/benchmarks/heterogeneous_benchmark.cuh"
 #include "../../src/kernels/cpu/sssp_pull.h"
 #include "../../src/kernels/gpu/sssp_pull.cuh"
 
@@ -140,7 +141,7 @@ int main(int argc, char *argv[]) {
         delete[] ret_dist;
     }
 
-    // Run naive kernel.
+    // Run GPU naive kernel.
     {
         std::cout << "SSSP GPU naive:" << std::endl;
         segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_naive,
@@ -149,7 +150,7 @@ int main(int argc, char *argv[]) {
         delete[] ret_dist;
     }
 
-    // Run warp min kernel.
+    // Run GPU warp min kernel.
     {
         std::cout << "SSSP GPU warp min:" << std::endl;
         segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_warp_min,
@@ -158,11 +159,22 @@ int main(int argc, char *argv[]) {
         delete[] ret_dist;
     }
 
-    // Run block min kernel.
+    // Run GPU block min kernel.
     {
         std::cout << "SSSP GPU block min:" << std::endl;
         segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_block_min,
                 init_dist, &ret_dist);
+        std::cout << res;
+        delete[] ret_dist;
+    }
+
+    // Run heterogeneous kernel.
+    {
+        nid_t middle = g.num_nodes / 16 * 2;
+        std::cout << "SSSP heterogeneous:" << std::endl;
+        segment_res_t res = benchmark_sssp_heterogeneous(g, 
+                epoch_sssp_pull_cpu, epoch_sssp_pull_gpu_warp_min, 
+                middle, g.num_nodes, 0, middle, init_dist, &ret_dist);
         std::cout << res;
         delete[] ret_dist;
     }

@@ -30,8 +30,9 @@
  * Returns:
  *   Execution time in milliseconds.
  */
-double sssp_pull_cpu(const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel, 
-        const weight_t *init_dist, weight_t **ret_dist
+double sssp_pull_cpu(
+        const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel, 
+        const weight_t *init_dist, weight_t ** const ret_dist
 ) {
     // Setup computed distances.
     weight_t *dist = new weight_t[g.num_nodes];
@@ -70,8 +71,8 @@ double sssp_pull_cpu(const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel,
  *   - source_id <- initial point. 
  *   - ret_dist  <- pointer to the address of the return distance array.
  */
-void sssp_pull_cpu_serial(const CSRWGraph &g, nid_t source_id, 
-        weight_t **ret_dist
+void sssp_pull_cpu_serial(
+        const CSRWGraph &g, nid_t source_id, weight_t **ret_dist
 ) {
     // Setup.
     weight_t *dist = new weight_t[g.num_nodes];
@@ -123,9 +124,10 @@ void sssp_pull_cpu_serial(const CSRWGraph &g, nid_t source_id,
  *   - num_threads <- number of processors.
  *   - updated     <- global counter of number of nodes updated.
  */
-void epoch_sssp_pull_cpu(const CSRWGraph &g, weight_t *dist, 
-        const nid_t start_id, const nid_t end_id, const int tid,
-        const int num_threads, nid_t &updated
+void epoch_sssp_pull_cpu(
+        const CSRWGraph &g, weight_t *dist, 
+        const nid_t start_id, const nid_t end_id, 
+        const int tid, const int num_threads, nid_t &updated
 ) {
     nid_t local_updated = 0;
 
