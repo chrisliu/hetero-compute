@@ -2,7 +2,7 @@
 Exploring graph algorithm execution across heterogenous processors.
 
 ## Goals
- - [ ] Graph generation and I/O.
+ - [x] Graph generation and I/O.
  - [ ] Construct BFS and SSSP kernels in C++ w/ OpenMP, CUDA, Vulkan.
  - [x] Benchmark suite for various epoch kernels.
  - [ ] Heterogeneous epoch kernels that uses both CPU and GPU variants.
