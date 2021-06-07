@@ -5,8 +5,12 @@
 #ifndef SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H
 #define SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H
 
+#include <functional>
 #include <iostream>
 #include <omp.h>
+#include <queue>
+#include <utility>
+#include <vector>
 
 #include "../kernel_types.h"
 #include "../../graph.h"
@@ -57,6 +61,50 @@ double sssp_pull_cpu(const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel,
     *ret_dist = dist;
 
     return timer.Millisecs();
+}
+
+/**
+ * Run SSSP kernel on CPU in serial.
+ * Parameters:
+ *   - g         <- graph.
+ *   - source_id <- initial point. 
+ *   - ret_dist  <- pointer to the address of the return distance array.
+ */
+void sssp_pull_cpu_serial(const CSRWGraph &g, nid_t source_id, 
+        weight_t **ret_dist
+) {
+    // Setup.
+    weight_t *dist = new weight_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        dist[i] = INF_WEIGHT;
+    dist[source_id] = 0.0f;
+
+    using wnode_pair_t = std::pair<weight_t, nid_t>;
+    std::priority_queue<wnode_pair_t, std::vector<wnode_pair_t>, 
+        std::greater<wnode_pair_t>> frontier;
+    frontier.push(std::make_pair(0.0f, source_id));
+
+    while (not frontier.empty()) {
+        weight_t weight = frontier.top().first;
+        nid_t    nid    = frontier.top().second;
+        frontier.pop();
+
+        // If this is the latest distance.
+        if (weight == dist[nid]) {
+            for (wnode_t nei : g.get_neighbors(nid)) {
+                weight_t new_weight = weight + nei.w;
+
+                // If possible, update weight.
+                if (new_weight < dist[nei.v]) {
+                    dist[nei.v] = new_weight;
+                    frontier.push(std::make_pair(new_weight, nei.v));
+                }
+            }
+        }
+    }
+
+    *ret_dist = dist;
 }
 
 /******************************************************************************

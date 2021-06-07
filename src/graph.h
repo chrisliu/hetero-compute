@@ -12,6 +12,7 @@
 #define SRC__GRAPH_H
 
 #include <cstdint>
+#include <fstream>
 #include <istream>
 #include <limits>
 
@@ -85,6 +86,18 @@ std::istream& operator>>(std::istream &is, CSRWGraph &g) {
             g.num_edges * sizeof(wnode_t));
 
     return is;
+}
+
+/**
+ * Helper function that deserializes graph from filename.
+ */
+__inline__
+CSRWGraph load_graph_from_file(char *filename) {
+    CSRWGraph g;
+    std::ifstream ifs(filename, std::ifstream::in | std::ifstream::binary);
+    ifs >> g;
+    ifs.close();
+    return g;
 }
 
 #endif // SRC__GRAPH_H

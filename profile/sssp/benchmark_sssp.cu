@@ -28,7 +28,6 @@ void save_results(std::string filename, ResT &result) {
     ofs << result;
     ofs.close();
 }
-
 #endif // SAVE_RESULTS
 
 int main(int argc, char *argv[]) {
