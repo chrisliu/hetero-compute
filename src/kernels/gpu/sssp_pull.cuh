@@ -110,7 +110,9 @@ double sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel,
  *
  * Conditions:
  *   - blockDim.x % warpSize == 0 (i.e., number of threads per block is some 
- *                                 multiple of the warp size).
+ *                                 multiple of the warp size)
+ *   - thread count == 1024       (TODO: make this variable with templating?)
+ *   - warpSize == 32             (depends on thread count)
  * Parameters:
  *   - index     <- graph index returned by deconstruct_wgraph().
  *   - neighbors <- graph neighbors returned by deconstruct_wgraph().
@@ -119,58 +121,52 @@ double sssp_pull_gpu(const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel,
  *   - dist      <- input distance and output distances computed this epoch.
  *   - updated   <- global counter on number of nodes updated.
  */
-/*__global__ */
-/*void epoch_sssp_pull_gpu_warp_min(const offset_t *index, */
-        /*const wnode_t *neighbors, const nid_t start_id, const nid_t end_id, */
-        /*weight_t *dist, nid_t *updated*/
-/*) {*/
-    /*extern __shared__ weight_t block_dists[];*/
+__global__
+void epoch_sssp_pull_gpu_block_min(const offset_t *index,
+        const wnode_t *neighbors, const nid_t start_id, const nid_t end_id,
+        weight_t *dist, nid_t *updated
+) {
+    __shared__ weight_t block_dist[32];
 
-    /*int tid         = blockIdx.x * blockDim.x + threadIdx.x;*/
-    /*int warpid      = tid % warpSize; // ID within a warp.*/
-    /*int num_threads = gridDim.x * blockDim.x;*/
+    int tid         = blockIdx.x * blockDim.x + threadIdx.x;
+    int warpid      = tid % warpSize; // ID within a warp.
 
-    /*nid_t local_updated = 0;*/
+    nid_t local_updated = 0;
 
-    /*for (int nid = start_id + blockIdx.x; nid < end_id; nid += gridDim.x) {*/
-        /*weight_t new_dist = dist[nid];*/
+    for (int nid = start_id + blockIdx.x; nid < end_id; nid += gridDim.x) {
+        weight_t new_dist = dist[nid];
 
-        /*// Find shortest candidate distance.*/
-        /*for (int i = index[nid] + threadIdx.x; i < index[nid + 1]; */
-                /*i += blockDim.x*/
-        /*) {*/
-            /*weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;*/
-            /*new_dist = min(prop_dist, new_dist);*/
-        /*}*/
+        // Find shortest candidate distance.
+        for (int i = index[nid] + threadIdx.x; i < index[nid + 1];
+                i += blockDim.x
+        ) {
+            weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;
+            new_dist = min(prop_dist, new_dist);
+        }
 
-        /*// Warp-level min.*/
-        /*new_dist = warp_min(new_dist);*/
+        // Warp-level min.
+        new_dist = warp_min(new_dist);
+        if (warpid == 0) { block_dist[threadIdx.x / warpSize] = new_dist; }
 
-        /*// Block-level min.*/
-        /*if (warpid == 0) {*/
-            /*int block_warp_id = threadIdx.x / warpSize;*/
-            /*block_dists[block_warp_id] = new_dist;*/
-            /*__sync_threads();*/
+        // Block level min (using warp min).
+        __syncthreads();
+        // If first warp.
+        if (threadIdx.x / warpSize == 0) {
+            new_dist = block_dist[warpid];
+            new_dist = warp_min(new_dist);
+        }
 
-            /*for (int strd = blockDim.x / warpSize / 2; strd >= 1; strd >>= 1) {*/
-                /*if (block_warp_id < strd) {*/
-                    /*block_dists[block_warp_id] = min(block_dists[block_warp_id],*/
-                            /*block_dists[block_warp_id + strd])*/
-                /*}*/
-                /*__sync_threads();*/
-            /*}*/
-        /*}*/
+        // Update distance if applicable.
+        if (threadIdx.x == 0 and new_dist != dist[nid]) {
+            dist[nid] = new_dist;
+            local_updated++;
+        }
+    }
 
-        /*// Update distance if applicable.*/
-        /*if (threadIdx.x == 0 and block_dists[0] != dist[nid]) {*/
-            /*dist[nid] == block_dist[0];*/
-            /*local_updated++;*/
-        /*}*/
-    /*}*/
-
-    /*// Push update count.*/
-    /*atomicAdd(updated, local_updated);*/
-/*}*/
+    // Push update count.
+    if (threadIdx.x == 0)
+        atomicAdd(updated, local_updated);
+}
 
 /**
  * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
@@ -220,7 +216,8 @@ void epoch_sssp_pull_gpu_warp_min(const offset_t *index,
     }
 
     // Push update count.
-    atomicAdd(updated, local_updated);
+    if (warpid == 0)
+        atomicAdd(updated, local_updated);
 }
 
 /**

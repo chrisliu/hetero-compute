@@ -105,6 +105,25 @@ int main(int argc, char *argv[]) {
 #endif // SAVE_RESULTS
     }
 
+    // Run block min epoch kernel.
+    {
+        SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_block_min);
+        
+#ifdef ONLY_LAYER
+        auto res = bench.layer_microbenchmark(DEPTH);
+#else
+        auto res = bench.tree_microbenchmark(DEPTH);
+#endif // ONLY_LAYER
+
+#ifdef PRINT_RESULTS
+        std::cout << res;
+#endif // PRINT_RESULTS
+
+#ifdef SAVE_RESULTS
+        save_results("sssp_gpu_block_min.yaml", res);
+#endif // SAVE_RESULTS
+    }
+
     weight_t *ret_dist  = nullptr;
     weight_t *init_dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
@@ -114,31 +133,37 @@ int main(int argc, char *argv[]) {
 
     // Run CPU kernel.
     {
+        std::cout << "SSSP CPU:" << std::endl;
         segment_res_t res = benchmark_sssp_cpu(g, epoch_sssp_pull_cpu,
                 init_dist, &ret_dist);
-
         std::cout << res;
-
         delete[] ret_dist;
     }
 
     // Run naive kernel.
     {
+        std::cout << "SSSP GPU naive:" << std::endl;
         segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_naive,
                 init_dist, &ret_dist);
-
         std::cout << res;
-
         delete[] ret_dist;
     }
 
     // Run warp min kernel.
     {
+        std::cout << "SSSP GPU warp min:" << std::endl;
         segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_warp_min,
                 init_dist, &ret_dist);
-
         std::cout << res;
+        delete[] ret_dist;
+    }
 
+    // Run block min kernel.
+    {
+        std::cout << "SSSP GPU block min:" << std::endl;
+        segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_block_min,
+                init_dist, &ret_dist);
+        std::cout << res;
         delete[] ret_dist;
     }
 

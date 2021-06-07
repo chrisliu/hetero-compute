@@ -40,7 +40,9 @@ int main(int argc, char *argv[]) {
         sssp_pull_cpu(g, epoch_sssp_pull_cpu, init_dist, &dist);
 
         std::cout << "Verifying SSSP CPU kernel ..." << std::endl;
-        verify(oracle_dist, dist, g.num_nodes);
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
         delete[] dist;
     }
@@ -51,7 +53,9 @@ int main(int argc, char *argv[]) {
         sssp_pull_gpu(g, epoch_sssp_pull_gpu_naive, init_dist, &dist);
 
         std::cout << "Verifying SSSP GPU naive kernel ..." << std::endl;
-        verify(oracle_dist, dist, g.num_nodes);
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
         delete[] dist;
     }
@@ -62,7 +66,22 @@ int main(int argc, char *argv[]) {
         sssp_pull_gpu(g, epoch_sssp_pull_gpu_warp_min, init_dist, &dist);
 
         std::cout << "Verifying SSSP GPU warp min kernel ..." << std::endl;
-        verify(oracle_dist, dist, g.num_nodes);
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
+
+        delete[] dist;
+    }
+
+    // Check SSSP GPU block min kernel.
+    {
+        weight_t *dist = nullptr;
+        sssp_pull_gpu(g, epoch_sssp_pull_gpu_block_min, init_dist, &dist);
+
+        std::cout << "Verifying SSSP GPU block min kernel ..." << std::endl;
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
         delete[] dist;
     }
@@ -86,8 +105,8 @@ bool verify(const weight_t *oracle_dist, const weight_t *dist,
 
     for (nid_t nid = 0; nid < num_nodes; nid++) {
         if (oracle_dist[nid] != dist[nid]) {
-            std::cout << nid << ": " << dist[nid] << " != " << oracle_dist[nid]
-                << std::endl;
+            std::cout << " > " << nid << ": " 
+                << dist[nid] << " != " << oracle_dist[nid] << std::endl;
             is_correct = false;
         }
     }
