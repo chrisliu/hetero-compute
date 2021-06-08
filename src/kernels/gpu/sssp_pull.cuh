@@ -57,15 +57,10 @@ double sssp_pull_gpu(
             cudaMemcpyHostToDevice));
     
     // Distance.
-    weight_t *dist = new weight_t[g.num_nodes];
-    #pragma omp parallel for
-    for (int i = 0; i < g.num_nodes; i++)
-        dist[i] = init_dist[i];
-
     weight_t *cu_dist = nullptr;
     size_t dist_size = g.num_nodes * sizeof(weight_t);
     CUDA_ERRCHK(cudaMalloc((void **) &cu_dist, dist_size));
-    CUDA_ERRCHK(cudaMemcpy(cu_dist, dist, dist_size, 
+    CUDA_ERRCHK(cudaMemcpy(cu_dist, init_dist, dist_size, 
             cudaMemcpyHostToDevice));
 
     // Update counter.
@@ -87,8 +82,9 @@ double sssp_pull_gpu(
     timer.Stop();
 
     // Copy distances.
-    CUDA_ERRCHK(cudaMemcpy(dist, cu_dist, dist_size, cudaMemcpyDeviceToHost));
-    *ret_dist = dist;
+    *ret_dist = new weight_t[g.num_nodes];
+    CUDA_ERRCHK(cudaMemcpy(*ret_dist, cu_dist, dist_size, 
+                cudaMemcpyDeviceToHost));
 
     // Free memory.
     CUDA_ERRCHK(cudaFree(cu_index));

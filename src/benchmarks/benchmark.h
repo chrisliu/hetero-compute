@@ -26,31 +26,31 @@
 /**
  * Results for a particular segment of nodes.
  */
-typedef struct {
+struct segment_res_t {
     nid_t    start_id;            // Starting node id.
     nid_t    end_id;              // Ending node id (exclusive).
     float    avg_degree;          // Average degree of segment.
     offset_t num_edges;           // Total number of edges in this subgraph. 
     double   millisecs;           // Execution time.  
     double   gteps;               // GTEPS.
-} segment_res_t;
+};
 
 /**
  * Results for a particular decomposition of nodes.
  */
-typedef struct {
+struct layer_res_t {
     segment_res_t *segments;      // Benchmarked segments for this layer.
     nid_t         num_segments;   // Number of segments this layer.
     int           depth;          // Depth of this current layer.
-} layer_res_t;
+};
 
 /**
  * Results for a tree decomposition of nodes.
  */
-typedef struct {
+struct tree_res_t {
     layer_res_t *layers;          // Benchmarked layers for this tree.
     int         num_layers;       // Number of layers in this tree.
-} tree_res_t;
+};
 
 // YAML generators.
 std::ostream &operator<<(std::ostream &os, const segment_res_t &res);

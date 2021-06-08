@@ -166,15 +166,20 @@ int main(int argc, char *argv[]) {
                 init_dist, &ret_dist);
         std::cout << res;
         delete[] ret_dist;
-    }
+   }
 
     // Run heterogeneous kernel.
     {
-        nid_t middle = g.num_nodes / 16 * 2;
+        nid_t                      middle     = g.num_nodes / 16 * 2;
+        graph_range_t              cpu_range  = { middle, g.num_nodes };
+        std::vector<graph_range_t> gpu_ranges = { { 0, middle } };
+        /*graph_range_t              cpu_range  = { middle - 500, middle};*/
+        /*std::vector<graph_range_t> gpu_ranges = { { 0, middle - 500}, */
+                                                  /*{ middle, g.num_nodes } };*/
         std::cout << "SSSP heterogeneous:" << std::endl;
-        segment_res_t res = benchmark_sssp_heterogeneous(g, 
-                epoch_sssp_pull_cpu, epoch_sssp_pull_gpu_warp_min, 
-                middle, g.num_nodes, 0, middle, init_dist, &ret_dist);
+        segment_res_t res = benchmark_sssp_heterogeneous(g,
+                epoch_sssp_pull_cpu, epoch_sssp_pull_gpu_warp_min,
+                cpu_range, gpu_ranges, init_dist, &ret_dist);
         std::cout << res;
         delete[] ret_dist;
     }

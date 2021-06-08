@@ -6,6 +6,7 @@
 #define SRC_KERNELS_HETEROGENEOUS__SSSP_PULL_CUH
 
 #include <omp.h>
+#include <vector>
 
 #include "../kernel_types.h"
 #include "../gpu/sssp_pull.cuh"
@@ -24,10 +25,8 @@
  *   - g                <- graph.
  *   - cpu_epoch_kernel <- cpu epoch kernel.
  *   - gpu_epoch_kernel <- gpu epoch kernel.
- *   - cpu_start_id     <- cpu kernel starting node id.
- *   - cpu_end_id       <- cpu kernel ending node id (exclusive).
- *   - gpu_start_id     <- gpu kernel starting node id.
- *   - gpu_end_id       <- gpu kernel ending node id (exclusive).
+ *   - cpu_range        <- range of CPU kernel.
+ *   - gpu_ranges       <- ranges for GPU kernel.
  *   - init_dist        <- initial distance array.
  *   - ret_dist         <- pointer to the address of the return distance array.
  *   - block_count      <- (optional) number of blocks.
@@ -39,8 +38,8 @@ double sssp_pull_heterogeneous(
         const CSRWGraph &g, 
         sssp_cpu_epoch_func cpu_epoch_kernel, 
         sssp_gpu_epoch_func gpu_epoch_kernel,
-        const nid_t cpu_start_id, const nid_t cpu_end_id,
-        const nid_t gpu_start_id, const nid_t gpu_end_id,
+        const graph_range_t cpu_range,
+        const std::vector<graph_range_t> gpu_ranges,
         const weight_t *init_dist, weight_t ** const ret_dist,
         int block_count = 64, int thread_count = 1024
 ) {
@@ -61,15 +60,16 @@ double sssp_pull_heterogeneous(
             cudaMemcpyHostToDevice));
     
     // Distance.
-    weight_t *dist = new weight_t[g.num_nodes];
+    size_t dist_size = g.num_nodes * sizeof(weight_t);
+    weight_t *dist = nullptr; 
+    CUDA_ERRCHK(cudaMallocHost((void **) &dist, dist_size));
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
         dist[i] = init_dist[i];
 
     weight_t *cu_dist = nullptr;
-    size_t dist_size = g.num_nodes * sizeof(weight_t);
     CUDA_ERRCHK(cudaMalloc((void **) &cu_dist, dist_size));
-    CUDA_ERRCHK(cudaMemcpy(cu_dist, dist, dist_size, 
+    CUDA_ERRCHK(cudaMemcpy(cu_dist, init_dist, dist_size, 
             cudaMemcpyHostToDevice));
 
     // Update counter.
@@ -79,8 +79,12 @@ double sssp_pull_heterogeneous(
     CUDA_ERRCHK(cudaMalloc((void **) &cu_updated, sizeof(nid_t)));
 
     // Get CPU and GPU block sizes.
-    size_t cpu_dist_size = (cpu_end_id - cpu_start_id) * sizeof(weight_t);
-    size_t gpu_dist_size = (gpu_end_id - gpu_start_id) * sizeof(weight_t);
+    size_t cpu_dist_size = (cpu_range.end_id - cpu_range.start_id) 
+        * sizeof(weight_t);
+    std::vector<size_t> gpu_dist_sizes(gpu_ranges.size());
+    for (int i = 0; i < gpu_ranges.size(); i++)
+        gpu_dist_sizes[i] = (gpu_ranges[i].end_id - gpu_ranges[i].start_id)
+            * sizeof(weight_t);
 
     // Start kernel!
     Timer timer; timer.Start();
@@ -89,13 +93,16 @@ double sssp_pull_heterogeneous(
         CUDA_ERRCHK(cudaMemset(cu_updated, 0, sizeof(nid_t)));
 
         // Launch GPU epoch kernel.
-        (*gpu_epoch_kernel)<<<block_count, thread_count>>>(cu_index, 
-                cu_neighbors, gpu_start_id, gpu_end_id, cu_dist, cu_updated);
+        for (int i = 0; i < gpu_ranges.size(); i++)
+            (*gpu_epoch_kernel)<<<block_count, thread_count>>>(
+                    cu_index, cu_neighbors, 
+                    gpu_ranges[i].start_id, gpu_ranges[i].end_id,
+                    cu_dist, cu_updated);
 
         // Launch CPU epoch kernel.
         #pragma omp parallel
         {
-            (*cpu_epoch_kernel)(g, dist, cpu_start_id, cpu_end_id, 
+            (*cpu_epoch_kernel)(g, dist, cpu_range.start_id, cpu_range.end_id,
                     omp_get_thread_num(), omp_get_num_threads(), cpu_updated);
         }
 
@@ -105,23 +112,31 @@ double sssp_pull_heterogeneous(
         updated += cpu_updated;
         
         // Synchronize distances.
-        CUDA_ERRCHK(cudaMemcpy(cu_dist + cpu_start_id, dist + cpu_start_id,
-                    cpu_dist_size, cudaMemcpyHostToDevice));
-        // Only updated GPU distances if another epoch will be performed.
-        /*if (updated != 0) */
-        CUDA_ERRCHK(cudaMemcpy(dist + gpu_start_id, cu_dist + gpu_start_id,
-                    gpu_dist_size, cudaMemcpyDeviceToHost));
+        for (int i = 0; i < gpu_ranges.size(); i++)
+            CUDA_ERRCHK(cudaMemcpyAsync(
+                        dist + gpu_ranges[i].start_id, 
+                        cu_dist + gpu_ranges[i].start_id,
+                        gpu_dist_sizes[i], cudaMemcpyDeviceToHost));
+        // Only perform HtoD memcpy if next epoch is to run (very expensive).
+        if (updated != 0)
+            CUDA_ERRCHK(cudaMemcpyAsync(
+                        cu_dist + cpu_range.start_id, dist + cpu_range.start_id,
+                        cpu_dist_size, cudaMemcpyHostToDevice));
     }
     timer.Stop();
 
-    // Assign output.
-    *ret_dist = dist;
+    // Copy output.
+    *ret_dist = new weight_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        (*ret_dist)[i] = dist[i];
 
     // Free memory.
     CUDA_ERRCHK(cudaFree(cu_index));
     CUDA_ERRCHK(cudaFree(cu_neighbors));
     CUDA_ERRCHK(cudaFree(cu_updated));
     CUDA_ERRCHK(cudaFree(cu_dist));
+    CUDA_ERRCHK(cudaFreeHost(dist));
 
     return timer.Millisecs();
 }

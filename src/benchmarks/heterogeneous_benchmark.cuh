@@ -14,10 +14,8 @@
  *   - g                <- graph.
  *   - cpu_epoch_kernel <- cpu epoch kernel.
  *   - gpu_epoch_kernel <- gpu epoch kernel.
- *   - cpu_start_id     <- cpu kernel starting node id.
- *   - cpu_end_id       <- cpu kernel ending node id (exclusive).
- *   - gpu_start_id     <- gpu kernel starting node id.
- *   - gpu_end_id       <- gpu kernel ending node id (exclusive).
+ *   - cpu_range        <- range of CPU kernel.
+ *   - gpu_ranges       <- ranges for GPU kernel.
  *   - init_dist        <- initial distance array.
  *   - ret_dist         <- pointer to the address of the return distance array.
  *   - block_count      <- (optional) number of blocks.
@@ -29,8 +27,8 @@ segment_res_t benchmark_sssp_heterogeneous(
         const CSRWGraph &g,
         sssp_cpu_epoch_func cpu_epoch_kernel, 
         sssp_gpu_epoch_func gpu_epoch_kernel,
-        const nid_t cpu_start_id, const nid_t cpu_end_id,
-        const nid_t gpu_start_id, const nid_t gpu_end_id,
+        const graph_range_t cpu_range,
+        const std::vector<graph_range_t> gpu_ranges,
         const weight_t *init_dist, weight_t ** const ret_dist,
         int block_count = 64, int thread_count = 1024);
 
@@ -42,8 +40,8 @@ segment_res_t benchmark_sssp_heterogeneous(
         const CSRWGraph &g,
         sssp_cpu_epoch_func cpu_epoch_kernel, 
         sssp_gpu_epoch_func gpu_epoch_kernel,
-        const nid_t cpu_start_id, const nid_t cpu_end_id,
-        const nid_t gpu_start_id, const nid_t gpu_end_id,
+        const graph_range_t cpu_range,
+        const std::vector<graph_range_t> gpu_ranges,
         const weight_t *init_dist, weight_t ** const ret_dist,
         int block_count, int thread_count
 ) {
@@ -58,9 +56,8 @@ segment_res_t benchmark_sssp_heterogeneous(
     double total_time = 0.0;
     for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
         total_time += sssp_pull_heterogeneous(g, 
-                cpu_epoch_kernel, gpu_epoch_kernel, cpu_start_id, cpu_end_id, 
-                gpu_start_id, gpu_end_id, init_dist, ret_dist, 
-                block_count, thread_count);
+                cpu_epoch_kernel, gpu_epoch_kernel, cpu_range, gpu_ranges, 
+                init_dist, ret_dist, block_count, thread_count);
 
         if (iter != BENCHMARK_TIME_ITERS - 1)
             delete[] (*ret_dist);
