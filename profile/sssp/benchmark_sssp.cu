@@ -19,7 +19,7 @@
 // Save results to YAML files.
 #define SAVE_RESULTS
 // Current/Up to (inclusive) this depth.
-#define DEPTH 4
+#define DEPTH 6
 
 #ifdef SAVE_RESULTS
 template <typename ResT>
@@ -108,7 +108,9 @@ int main(int argc, char *argv[]) {
 
     // Run block min epoch kernel.
     {
-        SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_block_min);
+        int thread_count = 64;
+        SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_block_min,
+                64 * (1024 / thread_count), thread_count);
         
 #ifdef ONLY_LAYER
         auto res = bench.layer_microbenchmark(DEPTH);
@@ -171,11 +173,11 @@ int main(int argc, char *argv[]) {
     // Run heterogeneous kernel.
     {
         nid_t                      middle     = g.num_nodes / 16 * 2;
-        graph_range_t              cpu_range  = { middle, g.num_nodes };
-        std::vector<graph_range_t> gpu_ranges = { { 0, middle } };
-        /*graph_range_t              cpu_range  = { middle - 500, middle};*/
-        /*std::vector<graph_range_t> gpu_ranges = { { 0, middle - 500}, */
-                                                  /*{ middle, g.num_nodes } };*/
+        /*graph_range_t              cpu_range  = { middle, g.num_nodes };*/
+        /*std::vector<graph_range_t> gpu_ranges = { { 0, middle } };*/
+        graph_range_t              cpu_range  = { middle - 250000, middle};
+        std::vector<graph_range_t> gpu_ranges = { { 0, middle - 250000},
+                                                  { middle, g.num_nodes } };
         std::cout << "SSSP heterogeneous:" << std::endl;
         segment_res_t res = benchmark_sssp_heterogeneous(g,
                 epoch_sssp_pull_cpu, epoch_sssp_pull_gpu_warp_min,

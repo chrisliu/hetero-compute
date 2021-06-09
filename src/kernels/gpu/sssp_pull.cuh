@@ -105,10 +105,10 @@ double sssp_pull_gpu(
  * block-level min is executed.
  *
  * Conditions:
+ *   - warpSize == 32             
  *   - blockDim.x % warpSize == 0 (i.e., number of threads per block is some 
  *                                 multiple of the warp size)
- *   - thread count == 1024       (TODO: make this variable with templating?)
- *   - warpSize == 32             (depends on thread count)
+     - thread count % warpSize == 0
  * Parameters:
  *   - index     <- graph index returned by deconstruct_wgraph().
  *   - neighbors <- graph neighbors returned by deconstruct_wgraph().
@@ -125,8 +125,12 @@ void epoch_sssp_pull_gpu_block_min(
 ) {
     __shared__ weight_t block_dist[32];
 
-    int tid         = blockIdx.x * blockDim.x + threadIdx.x;
-    int warpid      = tid % warpSize; // ID within a warp.
+    int tid    = blockIdx.x * blockDim.x + threadIdx.x;
+    int warpid = tid % warpSize; // ID within a warp.
+    
+    // Initialize block distances.
+    if (threadIdx.x / warpSize == 0)
+        block_dist[warpid] = INF_WEIGHT;
 
     nid_t local_updated = 0;
 
@@ -147,9 +151,9 @@ void epoch_sssp_pull_gpu_block_min(
 
         // Block level min (using warp min).
         __syncthreads();
-        // If first warp.
-        if (threadIdx.x / warpSize == 0) {
+        if (threadIdx.x / warpSize == 0) { // If first warp.
             new_dist = block_dist[warpid];
+            // TODO: optimize this to only use the necssary number of shuffles.
             new_dist = warp_min(new_dist);
         }
 
