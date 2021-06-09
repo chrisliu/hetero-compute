@@ -1,5 +1,5 @@
 CPP_COMPILER = g++
-CPP_FLAGS    = -O2 --std=c++11
+CPP_FLAGS    = -O2 --std=c++11 -fopenmp
 CXX          = $(CPP_COMPILER) $(CPP_FLAGS)
 
 .PHONY: all
