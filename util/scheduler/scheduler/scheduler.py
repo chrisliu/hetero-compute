@@ -167,25 +167,6 @@ class Scheduler:
         return best_profile
 
 def pprint_schedule(schedule: List[DeviceSchedule]):
-    print_out = """
--------------------------------------------------------------
-|         |        Device 0        |       Device 1         |
-|         |     Intel i7-9700K     | NVIDIA Quadro RTX 4000 |
-| Segment |       [60.00 ms]       |      [55.00 ms]        |
--------------------------------------------------------------
-|    9    |                        |     GPU_Kernel_1       |
-|         |                        |      [35.00 ms]        |
--------------------------------------------------------------
-|   10    |      CPU_Kernel_2      |                        |
-|         |       [37.00 ms]       |                        |
--------------------------------------------------------------
-|   11    |                        |     GPU_Kernel_2       |
-|         |                        |      [20.00 ms]        |
--------------------------------------------------------------
-|   12    |      CPU_Kernel_2      |                        |
-|         |       [23.00 ms]       |                        |
--------------------------------------------------------------
-    """
     num_devices     = len(schedule)
     max_device_name = 0
     max_kernel_name = 0
@@ -257,16 +238,16 @@ def pprint_schedule(schedule: List[DeviceSchedule]):
         print(row)
 
 if __name__ == '__main__':
-    cpu_k1 = KernelProfile("CPU_Kernel_1", [100, 75, 50, 40])
-    cpu_k2 = KernelProfile("CPU_Kernel_2", [120, 60, 55, 35])
-    gpu_k1 = KernelProfile("GPU_Kernel_1", [ 40, 70 ,60, 50])
-    gpu_k2 = KernelProfile("GPU_Kernel_2", [ 80, 55, 40, 20])
+    cpu_k1 = KernelProfile("SSSP CPU default", [100, 75, 50, 40])
+    cpu_k2 = KernelProfile("SSSP CPU ???", [120, 60, 55, 35])
+    gpu_k1 = KernelProfile("SSSP GPU warp min", [ 40, 70 ,60, 50])
+    gpu_k2 = KernelProfile("SSSP GPU naive", [ 80, 55, 40, 20])
 
-    cpu_profile = DeviceProfile("CPU", [cpu_k1, cpu_k2])
-    gpu_profile = DeviceProfile("GPU", [gpu_k1, gpu_k2])
+    cpu_profile = DeviceProfile("Intel i7-9700K", [cpu_k1, cpu_k2])
+    gpu_profile = DeviceProfile("NVIDIA Quadro RTX 4000", [gpu_k1, gpu_k2])
     profiles    = [cpu_profile, gpu_profile]
 
-    hardware_config = {"CPU": 1, "GPU": 2}
+    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 2}
 
     scheduler = Scheduler(profiles)
     schedule = scheduler.schedule(hardware_config, BestMaxTimeMetric)

@@ -11,7 +11,13 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
     profiles = load_profiles(args.profiles)
-    sched = scheduler.Scheduler(profiles)
+    s = scheduler.Scheduler(profiles)
+
+    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 1}
+
+    (metric, sched) = s.schedule(hardware_config, 
+                                         scheduler.BestMaxTimeMetric)
+    scheduler.pprint_schedule(sched)
 
 def create_parser() -> argparse.ArgumentParser:
     """Returns a valid python argument parser."""
