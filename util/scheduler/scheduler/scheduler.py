@@ -136,7 +136,8 @@ class Scheduler:
         # Base case.
         # No more segments to reassign.
         if segment == len(self.profiles[0]):
-            return (metric.compute_metric(schedules), copy.deepcopy(schedules))
+            return (metric.compute_metric(schedules), schedules)
+            #return (metric.compute_metric(schedules), copy.deepcopy(schedules))
 
         # Recursive case.
         best_profile = (metric.worst_metric(), dict())
@@ -156,13 +157,19 @@ class Scheduler:
                     dev_sched.schedule.append(kerseg)
                     best_result = self.__schedule_impl(schedules, metric, 
                                                        segment + 1)
+                    # Update profile if needed.
+                    if best_result[0] < best_profile[0]:
+                        if segment == len(self.profiles[0]) - 1:
+                            (metric, sched) = best_result
+                            best_profile = (metric, copy.deepcopy(sched))
+                        else:
+                            best_profile  = best_result
+                        #best_profile  = best_result
+
                     # Restore previous schedule.
                     dev_sched.exec_time -= kernel_profile[segment]
                     dev_sched.schedule.pop()
 
-                    # Update profile if needed.
-                    if best_result[0] < best_profile[0]:
-                        best_profile  = best_result
 
         return best_profile
 

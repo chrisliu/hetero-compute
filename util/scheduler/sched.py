@@ -13,7 +13,7 @@ def main():
     profiles = load_profiles(args.profiles)
     s = scheduler.Scheduler(profiles)
 
-    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 1}
+    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 2}
 
     (metric, sched) = s.schedule(hardware_config, 
                                          scheduler.BestMaxTimeMetric)
