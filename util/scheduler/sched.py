@@ -4,13 +4,14 @@ import yaml
 
 import scheduler
 
+from collections import defaultdict
 from typing import *
 
 def main():
     parser = create_parser()
     args = parser.parse_args()
     profiles = load_profiles(args.profiles)
-    scheduler.Scheduler(profiles)
+    sched = scheduler.Scheduler(profiles)
 
 def create_parser() -> argparse.ArgumentParser:
     """Returns a valid python argument parser."""
@@ -30,13 +31,27 @@ def create_parser() -> argparse.ArgumentParser:
                         help="YAML benchmark profiles for devices")
     return parser
 
-def load_profiles(fnames: List[str]) -> List[dict]:
+def load_profiles(fnames: List[str]) -> List[scheduler.DeviceProfile]:
     """Returns contents of profile files."""
-    profiles = list()
+    device_map = defaultdict(list)
     for fname in fnames:
         with open(fname, 'r') as ifs:
-            profiles.append(yaml.full_load(ifs))
-    return profiles
+            config_results = yaml.full_load(ifs)
+
+        # Save segment execution times as a kernel profile.
+        device_name    = config_results['config']['device']
+        kernel_name    = config_results['config']['kernel']
+        kernel_results = config_results['results'][0]['segments']
+        kernel_execs   = [segment['millis'] for segment in kernel_results]
+        kernel_profile = scheduler.KernelProfile(kernel_name, kernel_execs)
+
+        device_map[device_name].append(kernel_profile)
+
+    # Package Dict["device name", List[KernelProfile]] into List[DeviceProfile]
+    return [
+        scheduler.DeviceProfile(device_name, kernel_profiles)
+        for device_name, kernel_profiles in device_map.items()
+    ]
 
 if __name__ == '__main__':
     main()
