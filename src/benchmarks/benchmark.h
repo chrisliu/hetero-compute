@@ -6,6 +6,7 @@
 #define SRC_BENCHMARKS__BENCHMARK_H
 
 // Number of warmup rounds.
+#include <string>
 #define BENCHMARK_WARMUP_ITERS 5
 // Number of rounds to average.
 #define BENCHMARK_TIME_ITERS 5
@@ -27,12 +28,14 @@
  * Results for a particular segment of nodes.
  */
 struct segment_res_t {
-    nid_t    start_id;            // Starting node id.
-    nid_t    end_id;              // Ending node id (exclusive).
-    float    avg_degree;          // Average degree of segment.
-    offset_t num_edges;           // Total number of edges in this subgraph. 
-    double   millisecs;           // Execution time.  
-    double   gteps;               // GTEPS.
+    nid_t       start_id;         // Starting node id.
+    nid_t       end_id;           // Ending node id (exclusive).
+    float       avg_degree;       // Average degree of segment.
+    offset_t    num_edges;        // Total number of edges in this subgraph. 
+    double      millisecs;        // Execution time.  
+    double      gteps;            // GTEPS.
+    std::string device_name = ""; // Device name.
+    std::string kernel_name = ""; // Kernel name.
 };
 
 /**
@@ -42,6 +45,8 @@ struct layer_res_t {
     segment_res_t *segments;      // Benchmarked segments for this layer.
     nid_t         num_segments;   // Number of segments this layer.
     int           depth;          // Depth of this current layer.
+    std::string device_name = ""; // Device name.
+    std::string kernel_name = ""; // Kernel name.
 };
 
 /**
@@ -50,6 +55,8 @@ struct layer_res_t {
 struct tree_res_t {
     layer_res_t *layers;          // Benchmarked layers for this tree.
     int         num_layers;       // Number of layers in this tree.
+    std::string device_name = ""; // Device name.
+    std::string kernel_name = ""; // Kernel name.
 };
 
 // YAML generators.
@@ -104,6 +111,12 @@ protected:
  * Writer for single segment result. Emits valid YAML.
  */
 std::ostream& operator<<(std::ostream &os, const segment_res_t &res) {
+    // Write kernel configuration.
+    os << "config:" << std::endl
+       << "  - device: " << res.device_name << std::endl
+       << "    kernel: " << res.kernel_name << std::endl;
+    
+    // Write kernel results.
     os << std::setprecision(BENCHMARK_PRECISION)
        << "results:" << std::endl
        << "  - start: " << res.start_id << std::endl
@@ -117,9 +130,15 @@ std::ostream& operator<<(std::ostream &os, const segment_res_t &res) {
 }
 
 /**
- * Writer fro a layer of results. Emits valid YAML.
+ * Writer for a layer of results. Emits valid YAML.
  */
 std::ostream &operator<<(std::ostream &os, const layer_res_t &res) {
+    // Write kernel configuration.
+    os << "config:" << std::endl
+       << "  - device: " << res.device_name << std::endl
+       << "    kernel: " << res.kernel_name << std::endl;
+    
+    // Write kernel results.
     os << std::setprecision(BENCHMARK_PRECISION)
        << "results:" << std::endl
        << "  - depth: " << res.depth << std::endl
@@ -142,6 +161,12 @@ std::ostream &operator<<(std::ostream &os, const layer_res_t &res) {
  * Writer for list of layer results. Emits valid YAML.
  */
 std::ostream& operator<<(std::ostream &os, const tree_res_t &res) {
+    // Write kernel configuration.
+    os << "config:" << std::endl
+       << "  - device: " << res.device_name << std::endl
+       << "    kernel: " << res.kernel_name << std::endl;
+    
+    // Write kernel results.
     os << "results:" << std::endl;
     for (int depth = 0; depth < res.num_layers; depth++) {
         os << "  - depth: " << depth << std::endl
@@ -177,8 +202,9 @@ TreeBenchmark::TreeBenchmark(const CSRWGraph *g_)
  *   list of benchmark results (layer_res_t) ordered by increasing depth.
  */
 tree_res_t TreeBenchmark::tree_microbenchmark(const int depth) {
-    tree_res_t results = { nullptr, depth + 1 };
-    results.layers = new layer_res_t[depth + 1]; // 2^0, 2^1, ... , 2^{depth}.
+    tree_res_t results;
+    results.num_layers = depth + 1;
+    results.layers     = new layer_res_t[depth + 1]; // 2^0, ... , 2^{depth}.
 
     // Warmup caches.
     for (int iter = 0; iter < BENCHMARK_WARMUP_ITERS; iter++)
@@ -203,8 +229,10 @@ layer_res_t TreeBenchmark::layer_microbenchmark(const int depth) {
     nid_t num_segments = 1 << depth;
 
     // Init results.
-    layer_res_t results = { nullptr, num_segments, depth };
-    results.segments = new segment_res_t[num_segments]; 
+    layer_res_t results;
+    results.depth        = depth;
+    results.num_segments = num_segments;
+    results.segments     = new segment_res_t[num_segments]; 
 
     // g->num_nodes is always divisible by 2.
     nid_t segment_size = g->num_nodes / num_segments;

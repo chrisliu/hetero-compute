@@ -19,7 +19,8 @@
 // Save results to YAML files.
 #define SAVE_RESULTS
 // Current/Up to (inclusive) this depth.
-#define DEPTH 6
+//#define DEPTH 6
+#define DEPTH 3
 
 #ifdef SAVE_RESULTS
 template <typename ResT>
@@ -58,6 +59,8 @@ int main(int argc, char *argv[]) {
 #else
         auto res = bench.tree_microbenchmark(DEPTH);
 #endif // ONLY_LAYER
+        res.device_name = "Intel i7-9700K";
+        res.kernel_name = "SSSP CPU default";
         
 #ifdef PRINT_RESULTS
         std::cout << res;
@@ -77,6 +80,8 @@ int main(int argc, char *argv[]) {
 #else
         auto res = bench.tree_microbenchmark(DEPTH);
 #endif // ONLY_LAYER
+        res.device_name = "NVIDIA Quadro RTX 4000";
+        res.kernel_name = "SSSP GPU naive";
 
 #ifdef PRINT_RESULTS
         std::cout << res;
@@ -96,6 +101,8 @@ int main(int argc, char *argv[]) {
 #else
         auto res = bench.tree_microbenchmark(DEPTH);
 #endif // ONLY_LAYER
+        res.device_name = "NVIDIA Quadro RTX 4000";
+        res.kernel_name = "SSSP GPU warp min";
 
 #ifdef PRINT_RESULTS
         std::cout << res;
@@ -108,7 +115,7 @@ int main(int argc, char *argv[]) {
 
     // Run block min epoch kernel.
     {
-        int thread_count = 64;
+        int thread_count = 128;
         SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_block_min,
                 64 * (1024 / thread_count), thread_count);
         
@@ -117,6 +124,8 @@ int main(int argc, char *argv[]) {
 #else
         auto res = bench.tree_microbenchmark(DEPTH);
 #endif // ONLY_LAYER
+        res.device_name = "NVIDIA Quadro RTX 4000";
+        res.kernel_name = "SSSP GPU block min thread count 128";
 
 #ifdef PRINT_RESULTS
         std::cout << res;
