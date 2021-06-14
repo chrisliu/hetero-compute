@@ -1,41 +1,8 @@
+# Variety of scheduler implementations and data structures.
+
 from __future__ import annotations
 import copy
 from typing import *
-
-class KernelProfile:
-    """POD that contains the kernel's name and its respective profile."""
-
-    def __init__(self, kernel_name, profile: List[float]):
-        self.kernel_name = kernel_name
-        self.__profile   = profile
-
-    def __getitem__(self, key: int) -> float:
-        """profile getter sugar."""
-        return self.__profile[key]
-
-    def __len__(self) -> int:
-        return len(self.__profile)
-
-    def __repr__(self) -> str:
-        return f'KernelProfile(kernel={self.kernel_name})'
-
-class DeviceProfile:
-    """POD that contains the execution profiles for various kernels on a single
-    device."""
-
-    def __init__(self, device_name: str, kernel_profiles: List[KernelProfile]):
-        self.device_name     = device_name
-        self.kernel_profiles = kernel_profiles
-
-    def is_device(self, dname: str) -> bool:
-        """Returns if this device profile corresponds to the requested device."""
-        return dname == self.device_name
-
-    def __len__(self) -> int:
-        return len(self.kernel_profiles[0])
-
-    def __repr__(self) -> str:
-        return f'DeviceProfile(device={self.device_name})'
 
 class KernelSegment:
     """POD that contains a kernel and a segment."""
@@ -53,68 +20,17 @@ class DeviceSchedule:
         self.exec_time  : float               = float(0)
         self.schedule   : List[KernelSegment] = list()
 
-class Metric:
-    def __lt__(self, other: Metric) -> bool:
-        raise NotImplemented("metric comparison not implemented!")
-
-    @staticmethod
-    def compute_metric(schedules: Dict[str, DeviceSchedule]) -> Metric:
-        raise NotImplemented("compute_metric not implemented.")
-
-    @staticmethod
-    def worst_metric() -> Metric:
-        raise NotImplemented("compute_metric not implemented.")
-
-class BestMaxTimeMetric(Metric):
-    """
-    Metric that ranks by:
-      1) Best worst-possible device time.
-      2) Min overall time.
-      3) Least least-squares (from best worst-possible device time).
-    """
-    def __init__(self, worst_time: float, overall_time: float, variance: float):
-        self.worst_time   = worst_time
-        self.overall_time = overall_time
-        self.variance     = variance
-
-    def __lt__(self, other: BestMaxTimeMetric) -> bool:
-        # If best worst-possible device time is better.
-        if self.worst_time < other.worst_time:
-            return True
-        # If best worst-possible time is tied.
-        elif self.worst_time == other.worst_time:
-            # If overall time is better.
-            if self.overall_time < other.overall_time:
-                return True
-            #If overall time is tied.
-            elif self.overall_time == other.overall_time:
-                # If variance is better.
-                if self.variance < other.variance:
-                    return True
-        return False
-
-    @staticmethod
-    def compute_metric(schedules: Dict[str, DeviceSchedule]) \
-            -> BestMaxTimeMetric:
-        exec_times = [sched.exec_time
-                      for (_, sched_list) in schedules.items()
-                      for sched in sched_list]
-        worst_time   = max(exec_times)
-        overall_time = sum(exec_times)
-        variance     = sum((worst_time - exec_time) ** 2
-                           for exec_time in exec_times)
-        return BestMaxTimeMetric(worst_time, overall_time, variance)
-
-    @staticmethod
-    def worst_metric() -> BestMaxTimeMetric:
-        return BestMaxTimeMetric(float('inf'), float('inf'), float('inf'))
-
 class Scheduler:
+    def schedule(self, config: Dict[str, int], metric: Metric) \
+            -> Tuple[Metric, List[DeviceSchedule]]:
+        raise NotImplemented("schedule not implemented.")
+
+class ExhaustiveScheduler(Scheduler):
     def __init__(self, profiles: List[DeviceProfile]):
         self.profiles = profiles
 
     def schedule(self, config: Dict[str, int], metric: Metric) \
-            -> Tuple[float, List[DeviceSchedule]]:
+            -> Tuple[Metric, List[DeviceSchedule]]:
         """Returns the best schedule given a configuration of devices."""
         # Initialize devices.
         schedules: Dict[str, DeviceSchedule] = {
@@ -205,7 +121,8 @@ def pprint_schedule(schedule: List[DeviceSchedule]):
     max_seg_col   = max(len('Segment'), len(str(max_segment))) + 2
 
     # Row divider.
-    row = '-' * (1 + max_seg_col + 1 + (max_main_col + 1) * num_devices)
+    row = '+' + '-' * max_seg_col + '+' + \
+        ('-' * max_main_col + '+') * num_devices
     
     # Print device header.
     print(row)
@@ -243,19 +160,3 @@ def pprint_schedule(schedule: List[DeviceSchedule]):
         print()
 
         print(row)
-
-if __name__ == '__main__':
-    cpu_k1 = KernelProfile("SSSP CPU default", [100, 75, 50, 40])
-    cpu_k2 = KernelProfile("SSSP CPU ???", [120, 60, 55, 35])
-    gpu_k1 = KernelProfile("SSSP GPU warp min", [ 40, 70 ,60, 50])
-    gpu_k2 = KernelProfile("SSSP GPU naive", [ 80, 55, 40, 20])
-
-    cpu_profile = DeviceProfile("Intel i7-9700K", [cpu_k1, cpu_k2])
-    gpu_profile = DeviceProfile("NVIDIA Quadro RTX 4000", [gpu_k1, gpu_k2])
-    profiles    = [cpu_profile, gpu_profile]
-
-    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 2}
-
-    scheduler = Scheduler(profiles)
-    schedule = scheduler.schedule(hardware_config, BestMaxTimeMetric)
-    pprint_schedule(schedule[1])

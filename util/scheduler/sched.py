@@ -11,9 +11,9 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
     profiles = load_profiles(args.profiles)
-    s = scheduler.Scheduler(profiles)
+    s = scheduler.ExhaustiveScheduler(profiles)
 
-    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 2}
+    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 1}
 
     (metric, sched) = s.schedule(hardware_config, 
                                          scheduler.BestMaxTimeMetric)
@@ -61,4 +61,3 @@ def load_profiles(fnames: List[str]) -> List[scheduler.DeviceProfile]:
 
 if __name__ == '__main__':
     main()
-
