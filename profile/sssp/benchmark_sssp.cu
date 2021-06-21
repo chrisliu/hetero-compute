@@ -2,6 +2,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include "../../src/graph.h"
@@ -18,9 +19,14 @@
 #define PRINT_RESULTS
 // Save results to YAML files.
 #define SAVE_RESULTS
+
+#ifdef ONLY_LAYER
+// Number of segments (NOT depth).
+#define DEPTH 1 << 4
+#else
 // Current/Up to (inclusive) this depth.
-//#define DEPTH 6
-#define DEPTH 3
+#define DEPTH 6
+#endif // ONLY_LAYER
 
 #ifdef SAVE_RESULTS
 template <typename ResT>
@@ -115,25 +121,33 @@ int main(int argc, char *argv[]) {
 
     // Run block min epoch kernel.
     {
-        int thread_count = 128;
-        SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_block_min,
-                64 * (1024 / thread_count), thread_count);
+        int thread_counts[] = {64, 128, 256, 512, 1024};
+        for (int i = 0; i < 5; i++) {
+            int thread_count = thread_counts[i];
+            SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_block_min,
+                    64 * (1024 / thread_count), thread_count);
         
 #ifdef ONLY_LAYER
-        auto res = bench.layer_microbenchmark(DEPTH);
+            auto res = bench.layer_microbenchmark(DEPTH);
 #else
-        auto res = bench.tree_microbenchmark(DEPTH);
+            auto res = bench.tree_microbenchmark(DEPTH);
 #endif // ONLY_LAYER
-        res.device_name = "NVIDIA Quadro RTX 4000";
-        res.kernel_name = "SSSP GPU block min thread count 128";
+            std::stringstream kernelss;
+            kernelss << "SSSP GPU block min thread count " << thread_count;
+
+            res.device_name = "NVIDIA Quadro RTX 4000";
+            res.kernel_name = kernelss.str();
 
 #ifdef PRINT_RESULTS
-        std::cout << res;
+            std::cout << res;
 #endif // PRINT_RESULTS
 
 #ifdef SAVE_RESULTS
-        save_results("sssp_gpu_block_min.yaml", res);
+            std::stringstream fnamess;
+            fnamess << "sssp_gpu_block_min_" << thread_count << ".yaml";
+            save_results(fnamess.str(), res);
 #endif // SAVE_RESULTS
+        }
     }
 
     weight_t *ret_dist  = nullptr;

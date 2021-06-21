@@ -58,7 +58,7 @@ public:
     nid_t    num_nodes  = 0;       // Number of nodes.
     offset_t num_edges  = 0;       // Number of edges.
 
-    offset_t get_degree(nid_t nid) {
+    offset_t get_degree(nid_t nid) const {
         return index[nid + 1] - index[nid];
     }
 
