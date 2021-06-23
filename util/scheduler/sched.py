@@ -17,14 +17,23 @@ def main():
 
     hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 1}
     hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 2}
-    #hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 3}
+    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 3}
 
     start_t = time.time()
     schedule = s.schedule(hardware_config)
     #schedule = s.schedule(hardware_config, scheduler.BestMaxTimeMetric)
     end_t = time.time()
     print(f"Scheduler took {end_t - start_t:0.2f} seconds.")
+
+    # Disply schedule.
     scheduler.pprint_schedule(schedule)
+
+    # Print speedup against single device.
+    worst_time = max(schedule, key=lambda sched: sched.exec_time).exec_time
+    single_dev_time = s.best_single_device_time()
+    print(f"Longest device time:     {worst_time:0.2f} ms")
+    print(f"Best single device time: {single_dev_time:0.2f} ms")
+    print(f"{single_dev_time / worst_time:0.2f}x speedup")
 
 def create_parser() -> argparse.ArgumentParser:
     """Returns a valid python argument parser."""

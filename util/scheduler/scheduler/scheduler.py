@@ -227,6 +227,10 @@ class MostGainScheduler:
                                                 self.device_best[devfrom])
                 ]
 
+    def best_single_device_time(self) -> float:
+        best_proc = min(self.device_exec.items(), key=lambda t: t[1])[0]
+        return self.device_exec[best_proc]
+
     def schedule(self, config: Dict[str, int]) -> List[DeviceSchedule]:
         # Initialize devices.
         schedules: Dict[str, DeviceSchedule] = {
