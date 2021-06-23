@@ -259,21 +259,19 @@ class MostGainScheduler:
         # Rudimentary load balancing for processor.
         self.__balance_device(schedules, best_proc)
 
-        # Phase 2:
-        #   Greedily redistribute workloads to other device(s).
-        
-        #while True:
-            ##pprint_schedule(self.__flatten_schedule(schedules))
-            #(okay, next_schedules) = self.__greedy_balance(schedules)
-            #if not okay: break
-            #schedules = next_schedules
-        (okay, next_schedules) = self.__greedy_balance(schedules)
-        if okay: schedules = next_schedules
+        ## Phase 2:
+        ##   Greedily redistribute workloads to other device(s).
+        while True:
+            #pprint_schedule(self.__flatten_schedule(schedules))
+            (okay, next_schedules) = self.__greedy_balance(schedules)
+            if not okay: break
+            schedules = next_schedules
 
         # Return flattened schedule.
         return self.__flatten_schedule(schedules)
 
-    def __flatten_schedule(self, schedules: Dict[str, DeviceSchedule]):
+    def __flatten_schedule(self, schedules: Dict[str, List[DeviceSchedule]]) \
+            -> List[DeviceSchedule]:
         flat_schedules = [sched for (_, sched_list) in schedules.items()
                  for sched in sched_list]
         return flat_schedules
@@ -284,8 +282,8 @@ class MostGainScheduler:
                       for sched in sched_list]
         return max(exec_times)
 
-    def __greedy_balance(self, scheds: Dict[str, DeviceSchedule]) \
-            -> Tuple[bool, Dict[str, DeviceSchedule]]:
+    def __greedy_balance(self, scheds: Dict[str, List[DeviceSchedule]]) \
+            -> Tuple[bool, Dict[str, List[DeviceSchedule]]]:
         # Find processor that takes the most time. Find processor that takes the
         # least time (that aren't the same processor).
         proc_times = list()
@@ -321,10 +319,13 @@ class MostGainScheduler:
 
             # Update schedule.
             nsched = copy.deepcopy(scheds)
+
+            # Remove segment for @slow_proc.
             seg, devid = worst_segment[1]
-            nsched[slow_proc][devid].schedule.remove(seg) # Remove
+            nsched[slow_proc][devid].schedule.remove(seg) 
             nsched[slow_proc][devid].exec_time -= seg.exec_time
 
+            # Insert segment to @to_proc.
             insert_devid = 0
             insert_pos = 0
             for i, (segment, devid) in enumerate(proc_segments[to_proc]):
@@ -334,16 +335,60 @@ class MostGainScheduler:
                     insert_pos = 0
                 else:
                     insert_pos += 1
-            nsched[to_proc][insert_devid].schedule.insert(insert_pos, seg) # Ins
-            nsched[to_proc][insert_devid].exec_time += seg.exec_time
 
-            return (True, nsched)
+            to_seg = self.device_best[to_proc][seg.segment]
+            nsched[to_proc][insert_devid].schedule.insert(insert_pos, to_seg) 
+            nsched[to_proc][insert_devid].exec_time += to_seg.exec_time
+
+            # Load balance amongst devices.
+            self.__balance_device(nsched, slow_proc)
+            self.__balance_device(nsched, to_proc)
+
+            # If worst time has been improved, return new schedule.
+            if self.__get_worst_time(nsched) < old_time:
+                return (True, nsched)
 
         return (False, None)
 
-    def __balance_device(self, schedules: Dict[str, DeviceSchedule], device):
-        pass
+    def __balance_device(self, scheds: Dict[str, List[DeviceSchedule]], device):
+        # Get average time.
+        exec_times = [sched.exec_time for sched in scheds[device]]
+        avg_time = sum(exec_times) / len(exec_times)
 
+        def balance(from_dev, to_dev):
+            # Old variance to beat.
+            old_diff = (from_dev.exec_time - avg_time) ** 2 \
+                + (to_dev.exec_time - avg_time) ** 2
+            
+            while True:
+                from_seg = from_dev.schedule[-1]
+                diff_time = from_seg.exec_time
+                # Simulate moving lasts segment from @from_dev to @to_dev
+                new_diff = (from_dev.exec_time - diff_time - avg_time) ** 2 \
+                    + (to_dev.exec_time + diff_time - avg_time)
+
+                # If detrimental effect, don't do it!
+                if new_diff > old_diff: break
+
+                del from_dev.schedule[-1]
+                from_dev.exec_time -= diff_time
+                to_dev.schedule.insert(0, from_seg)
+                to_dev.exec_time += diff_time
+
+                old_diff = new_diff
+
+        # Go from left to right.
+        for from_dev, to_dev in zip(scheds[device][:-1], scheds[device][1:]):
+            if len(from_dev.schedule) == 0 or len(to_dev.schedule) == 0:
+                continue
+            balance(from_dev, to_dev)
+
+        # Go from right to left.
+        for from_dev, to_dev in \
+                zip(scheds[device][1::-1], scheds[device][:-1:-1]):
+            if len(from_dev.schedule) == 0 or len(to_dev.schedule) == 0:
+                continue
+            balance(from_dev, to_dev)
 
 ################################################################################
 ##### Helper functions #########################################################
