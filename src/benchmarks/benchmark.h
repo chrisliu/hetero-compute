@@ -115,8 +115,8 @@ protected:
 std::ostream& operator<<(std::ostream &os, const segment_res_t &res) {
     // Write kernel configuration.
     os << "config:" << std::endl
-       << "  - device: " << res.device_name << std::endl
-       << "    kernel: " << res.kernel_name << std::endl;
+       << "  device: " << res.device_name << std::endl
+       << "  kernel: " << res.kernel_name << std::endl;
     
     // Write kernel results.
     os << std::setprecision(BENCHMARK_PRECISION)
@@ -137,8 +137,8 @@ std::ostream& operator<<(std::ostream &os, const segment_res_t &res) {
 std::ostream &operator<<(std::ostream &os, const layer_res_t &res) {
     // Write kernel configuration.
     os << "config:" << std::endl
-       << "  - device: " << res.device_name << std::endl
-       << "    kernel: " << res.kernel_name << std::endl;
+       << "  device: " << res.device_name << std::endl
+       << "  kernel: " << res.kernel_name << std::endl;
     
     // Write kernel results.
     os << std::setprecision(BENCHMARK_PRECISION)
@@ -164,8 +164,8 @@ std::ostream &operator<<(std::ostream &os, const layer_res_t &res) {
 std::ostream& operator<<(std::ostream &os, const tree_res_t &res) {
     // Write kernel configuration.
     os << "config:" << std::endl
-       << "  - device: " << res.device_name << std::endl
-       << "    kernel: " << res.kernel_name << std::endl;
+       << "  device: " << res.device_name << std::endl
+       << "  kernel: " << res.kernel_name << std::endl;
     
     // Write kernel results.
     os << "results:" << std::endl;
