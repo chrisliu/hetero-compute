@@ -1,5 +1,6 @@
 import argparse
 import os
+import time
 import yaml
 
 import scheduler
@@ -11,13 +12,19 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
     profiles = load_profiles(args.profiles)
-    s = scheduler.ExhaustiveScheduler(profiles)
+    #s = scheduler.ExhaustiveScheduler(profiles)
+    s = scheduler.MostGainScheduler(profiles)
 
     hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 1}
+    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 2}
+    #hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 3}
 
-    (metric, sched) = s.schedule(hardware_config, 
-                                         scheduler.BestMaxTimeMetric)
-    scheduler.pprint_schedule(sched)
+    start_t = time.time()
+    schedule = s.schedule(hardware_config)
+    #schedule = s.schedule(hardware_config, scheduler.BestMaxTimeMetric)
+    end_t = time.time()
+    print(f"Scheduler took {end_t - start_t:0.2f} seconds.")
+    scheduler.pprint_schedule(schedule)
 
 def create_parser() -> argparse.ArgumentParser:
     """Returns a valid python argument parser."""
