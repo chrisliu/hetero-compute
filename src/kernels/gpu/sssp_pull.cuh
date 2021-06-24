@@ -265,4 +265,45 @@ void epoch_sssp_pull_gpu_naive(
     atomicAdd(updated, local_updated);
 }
 
+/******************************************************************************
+ ***** Helper Functions *******************************************************
+ ******************************************************************************/
+
+/** Identifier for epoch kernels. */
+enum class SSSPGPU {
+    one_to_one, warp_min, block_min
+};
+
+/** 
+ * Convert epoch kernel ID to its name. 
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel name.
+ */
+std::string to_string(SSSPGPU ker) {
+    switch (ker) {
+        case SSSPGPU::one_to_one: return "sssp_gpu_onetoone";
+        case SSSPGPU::warp_min:   return "sssp_gpu_warp_min";
+        case SSSPGPU::block_min:  return "sssp_gpu_block_min";
+    }
+    return "";
+}
+
+/**
+ * Convert epoch kernel ID to kernel function pointer.
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel function pointer.
+ */
+sssp_gpu_epoch_func get_kernel(SSSPGPU ker) {
+    switch (ker) {
+        case SSSPGPU::one_to_one: return epoch_sssp_pull_gpu_naive;
+        case SSSPGPU::warp_min:   return epoch_sssp_pull_gpu_warp_min;
+        case SSSPGPU::block_min:  return epoch_sssp_pull_gpu_block_min;
+    }
+    return nullptr;
+}
+
 #endif // SRC_KERNELS_GPU__KERNEL_SSSP_PULL_GPU_CUH

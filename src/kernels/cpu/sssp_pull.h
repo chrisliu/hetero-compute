@@ -9,6 +9,7 @@
 #include <iostream>
 #include <omp.h>
 #include <queue>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -151,6 +152,43 @@ void epoch_sssp_pull_cpu(
     // Push update count.
     #pragma omp atomic
     updated += local_updated;
+}
+
+/******************************************************************************
+ ***** Helper Functions *******************************************************
+ ******************************************************************************/
+
+/** Identifier for epoch kernels. */
+enum class SSSPCPU {
+    one_to_one
+};
+
+/** 
+ * Convert epoch kernel ID to its name. 
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel name.
+ */
+std::string to_string(SSSPCPU ker) {
+    switch (ker) {
+        case SSSPCPU::one_to_one: return "sssp_cpu_onetoone";
+    }
+    return "";
+}
+
+/**
+ * Convert epoch kernel ID to kernel function pointer.
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel function pointer.
+ */
+sssp_cpu_epoch_func get_kernel(SSSPCPU ker) {
+    switch (ker) {
+        case SSSPCPU::one_to_one: return epoch_sssp_pull_cpu;
+    }
+    return nullptr;
 }
 
 #endif // SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H

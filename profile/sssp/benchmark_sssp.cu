@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <type_traits>
+#include <vector>
 
 #include "../../src/graph.h"
 #include "../../src/util.h"
@@ -13,21 +15,57 @@
 #include "../../src/kernels/cpu/sssp_pull.h"
 #include "../../src/kernels/gpu/sssp_pull.cuh"
 
+/******************************************************************************
+ ***** Config *******************************************************************
+ ******************************************************************************/
+
 // Only get results for a particular depth (not the whole tree).
 #define ONLY_LAYER
 // Print results to std::cout.
 #define PRINT_RESULTS
 // Save results to YAML files.
 #define SAVE_RESULTS
+// Run full kernels.
+/*#define FULL_KERNEL*/
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
-#define DEPTH 1 << 4
+#define SEGMENTS 1 << 4
 #else
 // Current/Up to (inclusive) this depth.
 #define DEPTH 6
 #endif // ONLY_LAYER
 
+/******************************************************************************
+ ***** Helper Functions *******************************************************
+ ******************************************************************************/
+
+/** Identfier for devices. */
+enum class Device {
+    intel_i7_9700K, nvidia_quadro_rtx_4000
+};
+
+/**
+ * Converts device ID to its name.
+ * Parameters:
+ *   - dev <- device ID.
+ * Returns:
+ *  device name.
+ */
+std::string to_string(Device dev) {
+    switch (dev) {
+        case Device::intel_i7_9700K:         return "Intel i7-9700K";
+        case Device::nvidia_quadro_rtx_4000: return "NVIDIA Quadro RTX 4000";
+    }
+    return "";
+}
+
+/**
+ * Save results to a file.
+ * Parameters:
+ *   - filename <- filename.
+ *   - result <- result type (must have an operator<< implemented).
+ */
 #ifdef SAVE_RESULTS
 template <typename ResT>
 __inline__
@@ -37,6 +75,67 @@ void save_results(std::string filename, ResT &result) {
     ofs.close();
 }
 #endif // SAVE_RESULTS
+
+/**
+ * Generates an identifier for an arbitrary kernel.
+ * Parameters:
+ *   - ker  <- kernel ID.
+ *   - args <- zero or more arguments to append to the identifer.
+ * Returns:
+ *   kernel identifier.
+ */
+template <typename IdT, typename ...OptArgsT>
+__inline__
+std::string get_identifier(IdT ker, OptArgsT ...args) {
+    std::stringstream ss;
+    ss << to_string(ker);
+    if (sizeof...(args) > 0)
+        volatile int unused[] = { (ss << "_" << args, 0)... };
+    return ss.str();
+}
+
+/**
+ * Runs a tree benchmark from an arbitrary device and kernel.
+ * Parameters:
+ *   - BenchmarkT <- tree benchmark class.
+ *   - g          <- graph.
+ *   - dev        <- device ID.
+ *   - ker        <- kernel ID.
+ *   - args       <- optional arguments for the identifier.
+ */
+template <class BenchmarkT, typename IdT, typename ...OptArgsT,
+         typename = typename std::enable_if<
+            std::is_base_of<TreeBenchmark, BenchmarkT>::value>>
+void run_treebenchmark(CSRWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
+    // Run benchmark.
+    // TOOD: this is a hacky way to pass arguments into the benchmark function.
+    BenchmarkT bench(&g, get_kernel(ker), args...);
+
+#ifdef ONLY_LAYER
+    auto res = bench.layer_microbenchmark(SEGMENTS);
+#else 
+    auto res = bench.tree_microbenchmark(DEPTH);
+#endif  // ONLY_LAYER
+
+    // Configure metadata.
+    std::string kerid = get_identifier(ker, args...);
+    res.device_name = to_string(dev);
+    res.kernel_name = kerid;
+
+    // Output results appropriately.
+#ifdef PRINT_RESULTS
+    std::cout << res;
+#endif // PRINT_RESULTS
+
+#ifdef SAVE_RESULTS
+    save_results(kerid + ".yaml", res);
+#endif // SAVE_RESULTS
+}       
+ 
+
+/******************************************************************************
+ ***** Main *******************************************************************
+ ******************************************************************************/
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -56,100 +155,25 @@ int main(int argc, char *argv[]) {
 
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
-    // Run CPU epoch kernel.
-    {
-        SSSPCPUTreeBenchmark bench(&g, epoch_sssp_pull_cpu);
+    // Run CPU benchmarks.
+    run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K, 
+            SSSPCPU::one_to_one);
 
-#ifdef ONLY_LAYER
-        auto res = bench.layer_microbenchmark(DEPTH);
-#else
-        auto res = bench.tree_microbenchmark(DEPTH);
-#endif // ONLY_LAYER
-        res.device_name = "Intel i7-9700K";
-        res.kernel_name = "SSSP CPU default";
-        
-#ifdef PRINT_RESULTS
-        std::cout << res;
-#endif // PRINT_RESULTS
+    // Run GPU benchmarks.
+    const int block_count = 64;
+    run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
+            SSSPGPU::one_to_one, block_count, 1024);
+    run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
+            SSSPGPU::warp_min, block_count, 1024);
 
-#ifdef SAVE_RESULTS
-        save_results("sssp_cpu.yaml", res);
-#endif // SAVE_RESULTS
-    }
+    std::vector<int> thread_counts = {64, 128, 256, 512, 1024};
+    for (int thread_count : thread_counts) 
+        run_treebenchmark<SSSPGPUTreeBenchmark>(g, 
+                Device::nvidia_quadro_rtx_4000, SSSPGPU::block_min,
+                block_count * (1024 / thread_count), thread_count);
 
-    // Run naive epoch kernel.
-    {
-        SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_naive);
-        
-#ifdef ONLY_LAYER
-        auto res = bench.layer_microbenchmark(DEPTH);
-#else
-        auto res = bench.tree_microbenchmark(DEPTH);
-#endif // ONLY_LAYER
-        res.device_name = "NVIDIA Quadro RTX 4000";
-        res.kernel_name = "SSSP GPU naive";
-
-#ifdef PRINT_RESULTS
-        std::cout << res;
-#endif // PRINT_RESULTS
-
-#ifdef SAVE_RESULTS
-        save_results("sssp_gpu_naive.yaml", res);
-#endif // SAVE_RESULTS
-    }
-
-    // Run warp min epoch kernel.
-    {
-        SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_warp_min);
-        
-#ifdef ONLY_LAYER
-        auto res = bench.layer_microbenchmark(DEPTH);
-#else
-        auto res = bench.tree_microbenchmark(DEPTH);
-#endif // ONLY_LAYER
-        res.device_name = "NVIDIA Quadro RTX 4000";
-        res.kernel_name = "SSSP GPU warp min";
-
-#ifdef PRINT_RESULTS
-        std::cout << res;
-#endif // PRINT_RESULTS
-
-#ifdef SAVE_RESULTS
-        save_results("sssp_gpu_warp_min.yaml", res);
-#endif // SAVE_RESULTS
-    }
-
-    // Run block min epoch kernel.
-    {
-        int thread_counts[] = {64, 128, 256, 512, 1024};
-        for (int i = 0; i < 5; i++) {
-            int thread_count = thread_counts[i];
-            SSSPGPUTreeBenchmark bench(&g, epoch_sssp_pull_gpu_block_min,
-                    64 * (1024 / thread_count), thread_count);
-        
-#ifdef ONLY_LAYER
-            auto res = bench.layer_microbenchmark(DEPTH);
-#else
-            auto res = bench.tree_microbenchmark(DEPTH);
-#endif // ONLY_LAYER
-            std::stringstream kernelss;
-            kernelss << "SSSP GPU block min thread count " << thread_count;
-
-            res.device_name = "NVIDIA Quadro RTX 4000";
-            res.kernel_name = kernelss.str();
-
-#ifdef PRINT_RESULTS
-            std::cout << res;
-#endif // PRINT_RESULTS
-
-#ifdef SAVE_RESULTS
-            std::stringstream fnamess;
-            fnamess << "sssp_gpu_block_min_" << thread_count << ".yaml";
-            save_results(fnamess.str(), res);
-#endif // SAVE_RESULTS
-        }
-    }
-
+    // Full kernel runs.
+#ifdef FULL_KERNEL
     weight_t *ret_dist  = nullptr;
     weight_t *init_dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
@@ -196,11 +220,8 @@ int main(int argc, char *argv[]) {
     // Run heterogeneous kernel.
     {
         nid_t                      middle     = g.num_nodes / 16 * 2;
-        /*graph_range_t              cpu_range  = { middle, g.num_nodes };*/
-        /*std::vector<graph_range_t> gpu_ranges = { { 0, middle } };*/
-        graph_range_t              cpu_range  = { middle - 250000, middle};
-        std::vector<graph_range_t> gpu_ranges = { { 0, middle - 250000},
-                                                  { middle, g.num_nodes } };
+        graph_range_t              cpu_range  = { middle, g.num_nodes };
+        std::vector<graph_range_t> gpu_ranges = { { 0, middle } };
         std::cout << "SSSP heterogeneous:" << std::endl;
         segment_res_t res = benchmark_sssp_heterogeneous(g,
                 epoch_sssp_pull_cpu, epoch_sssp_pull_gpu_warp_min,
@@ -210,6 +231,7 @@ int main(int argc, char *argv[]) {
     }
 
     delete[] init_dist;
+#endif // FULL_KERNEL
 
     return EXIT_SUCCESS;
 }
