@@ -43,7 +43,7 @@ double sssp_pull_heterogeneous(
         const weight_t *init_dist, weight_t ** const ret_dist,
         int block_count = 64, int thread_count = 1024
 ) {
-    CONDCHK(gpu_epoch_kernel != epoch_sssp_pull_gpu_naive 
+    CONDCHK(gpu_epoch_kernel != epoch_sssp_pull_gpu_one_to_one
                 and thread_count % 32 != 0, 
             "thread count must be divisible by 32");
 

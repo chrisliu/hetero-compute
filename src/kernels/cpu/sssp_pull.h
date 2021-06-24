@@ -125,7 +125,7 @@ void sssp_pull_cpu_serial(
  *   - num_threads <- number of processors.
  *   - updated     <- global counter of number of nodes updated.
  */
-void epoch_sssp_pull_cpu(
+void epoch_sssp_pull_cpu_one_to_one(
         const CSRWGraph &g, weight_t *dist, 
         const nid_t start_id, const nid_t end_id, 
         const int tid, const int num_threads, nid_t &updated
@@ -164,7 +164,21 @@ enum class SSSPCPU {
 };
 
 /** 
- * Convert epoch kernel ID to its name. 
+ * Convert epoch kernel ID to its representation name (not as human-readable).
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel name.
+ */
+std::string to_repr(SSSPCPU ker) {
+    switch (ker) {
+        case SSSPCPU::one_to_one: return "sssp_cpu_onetoone";
+    }
+    return "";
+}
+
+/** 
+ * Convert epoch kernel ID to its human-readable name. 
  * Parameters:
  *   - ker <- kernel ID.
  * Returns:
@@ -172,7 +186,7 @@ enum class SSSPCPU {
  */
 std::string to_string(SSSPCPU ker) {
     switch (ker) {
-        case SSSPCPU::one_to_one: return "sssp_cpu_onetoone";
+        case SSSPCPU::one_to_one: return "SSSP CPU one-to-one";
     }
     return "";
 }
@@ -186,7 +200,7 @@ std::string to_string(SSSPCPU ker) {
  */
 sssp_cpu_epoch_func get_kernel(SSSPCPU ker) {
     switch (ker) {
-        case SSSPCPU::one_to_one: return epoch_sssp_pull_cpu;
+        case SSSPCPU::one_to_one: return epoch_sssp_pull_cpu_one_to_one;
     }
     return nullptr;
 }

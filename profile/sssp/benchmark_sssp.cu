@@ -77,7 +77,7 @@ void save_results(std::string filename, ResT &result) {
 #endif // SAVE_RESULTS
 
 /**
- * Generates an identifier for an arbitrary kernel.
+ * Generates the YAML filename for an arbitrary kernel.
  * Parameters:
  *   - ker  <- kernel ID.
  *   - args <- zero or more arguments to append to the identifer.
@@ -86,11 +86,30 @@ void save_results(std::string filename, ResT &result) {
  */
 template <typename IdT, typename ...OptArgsT>
 __inline__
-std::string get_identifier(IdT ker, OptArgsT ...args) {
+std::string get_filename(IdT ker, OptArgsT ...args) {
+    std::stringstream ss;
+    ss << to_repr(ker);
+    if (sizeof...(args) > 0)
+        volatile int unused[] = { (ss << "_" << args, 0)... };
+    ss << ".yaml";
+    return ss.str();
+}
+
+/**
+ * Generates the human-readable kernel name for an arbitrary kernel.
+ * Parameters:
+ *   - ker  <- kernel ID.
+ *   - args <- zero or more arguments to append to the identifer.
+ * Returns:
+ *   kernel identifier.
+ */
+template <typename IdT, typename ...OptArgsT>
+__inline__
+std::string get_kernel_name(IdT ker, OptArgsT ...args) {
     std::stringstream ss;
     ss << to_string(ker);
     if (sizeof...(args) > 0)
-        volatile int unused[] = { (ss << "_" << args, 0)... };
+        volatile int unused[] = { (ss << " " << args, 0)... };
     return ss.str();
 }
 
@@ -118,9 +137,8 @@ void run_treebenchmark(CSRWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
 #endif  // ONLY_LAYER
 
     // Configure metadata.
-    std::string kerid = get_identifier(ker, args...);
     res.device_name = to_string(dev);
-    res.kernel_name = kerid;
+    res.kernel_name = get_kernel_name(ker, args...);
 
     // Output results appropriately.
 #ifdef PRINT_RESULTS
@@ -128,10 +146,9 @@ void run_treebenchmark(CSRWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
 #endif // PRINT_RESULTS
 
 #ifdef SAVE_RESULTS
-    save_results(kerid + ".yaml", res);
+    save_results(get_filename(ker, args...), res);
 #endif // SAVE_RESULTS
-}       
- 
+}
 
 /******************************************************************************
  ***** Main *******************************************************************
@@ -160,7 +177,7 @@ int main(int argc, char *argv[]) {
             SSSPCPU::one_to_one);
 
     // Run GPU benchmarks.
-    const int block_count = 64;
+    constexpr int block_count = 64;
     run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
             SSSPGPU::one_to_one, block_count, 1024);
     run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,

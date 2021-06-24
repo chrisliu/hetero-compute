@@ -15,7 +15,7 @@
 
 /** Forward decl. */
 __global__ 
-void epoch_sssp_pull_gpu_naive(
+void epoch_sssp_pull_gpu_one_to_one(
         const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
 );
@@ -41,7 +41,8 @@ double sssp_pull_gpu(
         const weight_t *init_dist, weight_t ** const ret_dist, 
         int block_count = 64, int thread_count = 1024
 ) {
-    CONDCHK(epoch_kernel != epoch_sssp_pull_gpu_naive and thread_count % 32 != 0, 
+    CONDCHK(epoch_kernel != epoch_sssp_pull_gpu_one_to_one 
+                and thread_count % 32 != 0, 
             "thread count must be divisible by 32");
 
     // Copy graph.
@@ -235,7 +236,7 @@ void epoch_sssp_pull_gpu_warp_min(
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__ 
-void epoch_sssp_pull_gpu_naive(
+void epoch_sssp_pull_gpu_one_to_one(
         const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id, 
         weight_t *dist, nid_t *updated
@@ -275,7 +276,23 @@ enum class SSSPGPU {
 };
 
 /** 
- * Convert epoch kernel ID to its name. 
+ * Convert epoch kernel ID to its representation name (not as human-readable). 
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel name.
+ */
+std::string to_repr(SSSPGPU ker) {
+    switch (ker) {
+        case SSSPGPU::one_to_one: return "sssp_gpu_onetoone";
+        case SSSPGPU::warp_min:   return "sssp_gpu_warp_min";
+        case SSSPGPU::block_min:  return "sssp_gpu_block_min";
+    }
+    return "";
+}
+
+/** 
+ * Convert epoch kernel ID to its human-readable name. 
  * Parameters:
  *   - ker <- kernel ID.
  * Returns:
@@ -283,9 +300,9 @@ enum class SSSPGPU {
  */
 std::string to_string(SSSPGPU ker) {
     switch (ker) {
-        case SSSPGPU::one_to_one: return "sssp_gpu_onetoone";
-        case SSSPGPU::warp_min:   return "sssp_gpu_warp_min";
-        case SSSPGPU::block_min:  return "sssp_gpu_block_min";
+        case SSSPGPU::one_to_one: return "SSSP GPU one-to-one";
+        case SSSPGPU::warp_min:   return "SSSP GPU warp-min";
+        case SSSPGPU::block_min:  return "SSSP GPU block-min";
     }
     return "";
 }
@@ -299,7 +316,7 @@ std::string to_string(SSSPGPU ker) {
  */
 sssp_gpu_epoch_func get_kernel(SSSPGPU ker) {
     switch (ker) {
-        case SSSPGPU::one_to_one: return epoch_sssp_pull_gpu_naive;
+        case SSSPGPU::one_to_one: return epoch_sssp_pull_gpu_one_to_one;
         case SSSPGPU::warp_min:   return epoch_sssp_pull_gpu_warp_min;
         case SSSPGPU::block_min:  return epoch_sssp_pull_gpu_block_min;
     }
