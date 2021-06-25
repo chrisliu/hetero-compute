@@ -9,23 +9,23 @@ from collections import defaultdict
 from typing import *
 
 def main():
+    # Load arguments.
     parser = create_parser()
     args = parser.parse_args()
-    profiles = load_profiles(args.profiles)
-    #s = scheduler.ExhaustiveScheduler(profiles)
-    s = scheduler.MostGainScheduler(profiles)
 
-    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 1}
-    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 2}
-    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 3}
+    # Load profiles and query device counts.
+    profiles = load_profiles(args.profiles)
+    hardware_config = query_devices(profiles)
+
+    # Schedule.
+    s = scheduler.MostGainScheduler(profiles)
 
     start_t = time.time()
     schedule = s.schedule(hardware_config)
-    #schedule = s.schedule(hardware_config, scheduler.BestMaxTimeMetric)
     end_t = time.time()
     print(f"Scheduler took {end_t - start_t:0.2f} seconds.")
 
-    # Disply schedule.
+    # Display schedule.
     scheduler.pprint_schedule(schedule)
 
     # Print speedup against single device.
@@ -34,6 +34,9 @@ def main():
     print(f"Longest device time:     {worst_time:0.2f} ms")
     print(f"Best single device time: {single_dev_time:0.2f} ms")
     print(f"{single_dev_time / worst_time:0.2f}x speedup")
+
+    # Save schedule.
+    write_schedule(schedule, 'out.skd')
 
 def create_parser() -> argparse.ArgumentParser:
     """Returns a valid python argument parser."""
@@ -74,6 +77,44 @@ def load_profiles(fnames: List[str]) -> List[scheduler.DeviceProfile]:
         scheduler.DeviceProfile(device_name, kernel_profiles)
         for device_name, kernel_profiles in device_map.items()
     ]
+
+def query_devices(profiles: List[scheduler.DeviceProfile]) -> Dict[str, int]:
+    """Query user for devices."""
+    def valid_count(devname: str) -> int:
+        """Returns first valid integer value inputted."""
+        print(f"How many {devname}?")
+        while True:
+            val = input(" >  ")
+            try:
+                return int(val)
+            except:
+                print("(!) Please enter an integer.")
+
+    hardware_config = dict()
+    for devprof in profiles:
+        devname = devprof.device_name
+        hardware_config[devname] = valid_count(devname)
+    return hardware_config
+
+def write_schedule(schedule: List[scheduler.DeviceSchedule], fname: str):
+    """Writes schedule out to file.
+
+    Sample output:
+    Procesor 1
+    0 Kernel 1
+    3 Kernel 2
+    Processor 2
+    1 Kernel 3
+    2 Kernel 3
+    """
+    with open(fname, 'w') as ofs:
+        for devsched in schedule:
+            # Write filename.
+            ofs.write(f'{devsched.device_name}\n')
+
+            # Write segments and kernels.
+            for seg in devsched.schedule:
+                ofs.write(f'{seg.segment} {seg.kernel_name}\n')
 
 if __name__ == '__main__':
     main()
