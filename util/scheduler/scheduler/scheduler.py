@@ -354,7 +354,8 @@ class MostGainScheduler:
 
         return (False, None)
 
-    def __balance_device(self, scheds: Dict[str, List[DeviceSchedule]], device):
+    def __balance_device(self, scheds: Dict[str, List[DeviceSchedule]], 
+                         device: str):
         # Get average time.
         exec_times = [sched.exec_time for sched in scheds[device]]
         avg_time = sum(exec_times) / len(exec_times)
@@ -364,7 +365,7 @@ class MostGainScheduler:
             old_diff = (from_dev.exec_time - avg_time) ** 2 \
                 + (to_dev.exec_time - avg_time) ** 2
             
-            while True:
+            while len(from_dev.schedule):
                 from_seg = from_dev.schedule[-1]
                 diff_time = from_seg.exec_time
                 # Simulate moving lasts segment from @from_dev to @to_dev
@@ -372,8 +373,9 @@ class MostGainScheduler:
                     + (to_dev.exec_time + diff_time - avg_time)
 
                 # If detrimental effect, don't do it!
-                if new_diff > old_diff: break
+                if new_diff >= old_diff: break
 
+                # Otherwise, make change.
                 del from_dev.schedule[-1]
                 from_dev.exec_time -= diff_time
                 to_dev.schedule.insert(0, from_seg)
@@ -383,15 +385,11 @@ class MostGainScheduler:
 
         # Go from left to right.
         for from_dev, to_dev in zip(scheds[device][:-1], scheds[device][1:]):
-            if len(from_dev.schedule) == 0 or len(to_dev.schedule) == 0:
-                continue
             balance(from_dev, to_dev)
 
         # Go from right to left.
         for from_dev, to_dev in \
-                zip(scheds[device][1::-1], scheds[device][:-1:-1]):
-            if len(from_dev.schedule) == 0 or len(to_dev.schedule) == 0:
-                continue
+                zip(scheds[device][1:][::-1], scheds[device][:-1][::-1]):
             balance(from_dev, to_dev)
 
 ################################################################################

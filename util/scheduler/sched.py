@@ -16,6 +16,7 @@ def main():
     # Load profiles and query device counts.
     profiles = load_profiles(args.profiles)
     hardware_config = query_devices(profiles)
+    profiles = filter_profiles(profiles, hardware_config)
 
     # Schedule.
     s = scheduler.MostGainScheduler(profiles)
@@ -93,19 +94,29 @@ def query_devices(profiles: List[scheduler.DeviceProfile]) -> Dict[str, int]:
     hardware_config = dict()
     for devprof in profiles:
         devname = devprof.device_name
-        hardware_config[devname] = valid_count(devname)
+        count   = valid_count(devname)
+        if count: # Only add device if count > 0.
+            hardware_config[devname] = count
     return hardware_config
+
+def filter_profiles(profiles: List[scheduler.DeviceProfile], 
+                    hardware_config: Dict[str, int]) \
+        -> List[scheduler.DeviceProfile]:
+    """Removes device profiles that aren't part of the hardware configuration.
+    """
+    return [devprof for devprof in profiles
+            if devprof.device_name in hardware_config]
 
 def write_schedule(schedule: List[scheduler.DeviceSchedule], fname: str):
     """Writes schedule out to file.
 
     Sample output:
     Procesor 1
-    0 Kernel 1
-    3 Kernel 2
+     > 0 Kernel 1
+     > 3 Kernel 2
     Processor 2
-    1 Kernel 3
-    2 Kernel 3
+     > 1 Kernel 3
+     > 2 Kernel 3
     """
     with open(fname, 'w') as ofs:
         for devsched in schedule:
@@ -114,7 +125,7 @@ def write_schedule(schedule: List[scheduler.DeviceSchedule], fname: str):
 
             # Write segments and kernels.
             for seg in devsched.schedule:
-                ofs.write(f'{seg.segment} {seg.kernel_name}\n')
+                ofs.write(f' > {seg.segment} {seg.kernel_name}\n')
 
 if __name__ == '__main__':
     main()
