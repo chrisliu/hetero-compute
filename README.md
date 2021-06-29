@@ -8,4 +8,4 @@ Exploring graph algorithm execution across heterogenous processors.
  - [ ] Heterogeneous epoch kernels that uses both CPU and GPU variants.
 
 ## Contributors
-This project is lead by [Christopher Liu](https://chrisliu.org/) who is advised by Professor [Tyler Sorenson](https://users.soe.ucsc.edu/~tsorensen/).
+This project is lead by [Christopher Liu](https://chrisliu.org/) who is advised by Professor [Tyler Sorensen](https://users.soe.ucsc.edu/~tsorensen/).
