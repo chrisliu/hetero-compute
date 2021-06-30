@@ -10,6 +10,7 @@
 
 #include "../kernel_types.h"
 #include "../../cuda.cuh"
+#include "../../devices.h"
 #include "../../graph.h"
 #include "../../util.h"
 

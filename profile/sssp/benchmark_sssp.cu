@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "../../src/graph.h"
+#include "../../src/scheduler.h"
 #include "../../src/util.h"
 #include "../../src/benchmarks/gpu_benchmark.cuh"
 #include "../../src/benchmarks/cpu_benchmark.h"
@@ -39,26 +40,6 @@
 /******************************************************************************
  ***** Helper Functions *******************************************************
  ******************************************************************************/
-
-/** Identfier for devices. */
-enum class Device {
-    intel_i7_9700K, nvidia_quadro_rtx_4000
-};
-
-/**
- * Converts device ID to its name.
- * Parameters:
- *   - dev <- device ID.
- * Returns:
- *  device name.
- */
-std::string to_string(Device dev) {
-    switch (dev) {
-        case Device::intel_i7_9700K:         return "Intel i7-9700K";
-        case Device::nvidia_quadro_rtx_4000: return "NVIDIA Quadro RTX 4000";
-    }
-    return "";
-}
 
 /**
  * Save results to a file.
@@ -172,22 +153,25 @@ int main(int argc, char *argv[]) {
 
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
-    // Run CPU benchmarks.
-    run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K, 
-            SSSPCPU::one_to_one);
+    // Load in schedule.
+    load_schedule("out.skd");
 
-    // Run GPU benchmarks.
-    constexpr int block_count = 64;
-    run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
-            SSSPGPU::one_to_one, block_count, 1024);
-    run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
-            SSSPGPU::warp_min, block_count, 1024);
+    /*// Run CPU benchmarks.*/
+    /*run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K, */
+            /*SSSPCPU::one_to_one);*/
 
-    std::vector<int> thread_counts = {64, 128, 256, 512, 1024};
-    for (int thread_count : thread_counts) 
-        run_treebenchmark<SSSPGPUTreeBenchmark>(g, 
-                Device::nvidia_quadro_rtx_4000, SSSPGPU::block_min,
-                block_count * (1024 / thread_count), thread_count);
+    /*// Run GPU benchmarks.*/
+    /*constexpr int block_count = 64;*/
+    /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,*/
+            /*SSSPGPU::one_to_one, block_count, 1024);*/
+    /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,*/
+            /*SSSPGPU::warp_min, block_count, 1024);*/
+
+    /*std::vector<int> thread_counts = {64, 128, 256, 512, 1024};*/
+    /*for (int thread_count : thread_counts) */
+        /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, */
+                /*Device::nvidia_quadro_rtx_4000, SSSPGPU::block_min,*/
+                /*block_count * (1024 / thread_count), thread_count);*/
 
     // Full kernel runs.
 #ifdef FULL_KERNEL

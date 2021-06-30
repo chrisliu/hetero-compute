@@ -7,7 +7,10 @@
 
 #include "../graph.h"
 
-/** Helper data structures. */
+/******************************************************************************
+ ***** Data Structures ********************************************************
+ ******************************************************************************/
+
 /**
  * Defines the segment a kernel is supposed to process.
  * A kernel should process the range [start_id, end_id).
@@ -16,6 +19,10 @@ struct graph_range_t {
     nid_t start_id; // Starting node id.
     nid_t end_id;   // Ending node id (exclusive).
 };
+
+/******************************************************************************
+ ***** Kernel Types ***********************************************************
+ ******************************************************************************/
 
 /** SSSP epoch kernels. */
 /** CPU */
