@@ -37,6 +37,7 @@ def main():
     print(f"{single_dev_time / worst_time:0.2f}x speedup")
 
     # Save schedule.
+    scheduler.contiguify_schedule(schedule)
     write_schedule(schedule, 'out.skd')
 
 def create_parser() -> argparse.ArgumentParser:
@@ -112,11 +113,15 @@ def write_schedule(schedule: List[scheduler.DeviceSchedule], fname: str):
 
     Sample output:
     Procesor 1
-     > 0 Kernel 1
-     > 3 Kernel 2
+    0 1
+    Kernel 1
+    3 3
+    Kernel 2
     Processor 2
-     > 1 Kernel 3
-     > 2 Kernel 3
+    2 2
+    Kernel 3
+    4 5
+    Kernel 4
     """
     with open(fname, 'w') as ofs:
         for devsched in schedule:
@@ -125,7 +130,8 @@ def write_schedule(schedule: List[scheduler.DeviceSchedule], fname: str):
 
             # Write segments and kernels.
             for seg in devsched.schedule:
-                ofs.write(f' > {seg.segment} {seg.kernel_name}\n')
+                ofs.write(f'{seg.seg_start} {seg.seg_end}\n')
+                ofs.write(f'{seg.kernel_name}\n')
 
 if __name__ == '__main__':
     main()

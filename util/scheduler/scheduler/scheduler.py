@@ -13,7 +13,9 @@ class KernelSegment:
 
     def __init__(self, kernel_name: str, segment: int, exec_time: float):
         self.kernel_name = kernel_name
-        self.segment     = segment
+        self.segment     = segment # For scheduling algorithm.
+        self.seg_start   = segment # For contiguify.
+        self.seg_end     = segment # For contiguify.
         self.exec_time   = exec_time
 
     def __repr__(self) -> str:
@@ -467,3 +469,21 @@ def pprint_schedule(schedule: List[DeviceSchedule]):
         print()
 
         print(row)
+
+def contiguify_schedule(schedule: List[DeviceSchedule]):
+    """Combine contiguous segments (same device, same kernel) in place."""
+    # For each device schedule.
+    for devsched in schedule:
+        idx = 0
+        prev_segment = KernelSegment("", 0, 0.0)
+        while idx != len(devsched.schedule):
+            cur_segment = devsched.schedule[idx]
+            # If equal contiguify segment.
+            if prev_segment.kernel_name == cur_segment.kernel_name \
+                    and prev_segment.seg_end + 1 == cur_segment.segment:
+                prev_segment.seg_end += 1
+                del devsched.schedule[idx]
+            # Otherwise, move on.
+            else:
+                prev_segment = cur_segment
+                idx += 1
