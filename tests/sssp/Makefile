@@ -1,5 +1,5 @@
 CPP_COMPILER    = nvcc
-CPP_FLAGS       = -O2 --std=c++11 
+CPP_FLAGS       = -O2 --std=c++17
 CROSS_CPP_FLAGS = -fopenmp 
 CXX             = $(CPP_COMPILER) $(CPP_FLAGS) -Xcompiler ${CROSS_CPP_FLAGS}
 

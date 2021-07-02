@@ -141,38 +141,34 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    /*// Load in graph.*/
-    /*CSRWGraph g;*/
-    /*std::cout << "Loading graph ..." << std::endl;*/
+    // Load in graph.
+    CSRWGraph g;
+    std::cout << "Loading graph ..." << std::endl;
 
-    /*std::ifstream ifs(argv[1], std::ifstream::in | std::ifstream::binary);*/
-    /*Timer timer; timer.Start(); // Start timing.*/
-    /*ifs >> g;*/
-    /*timer.Stop(); // Stop timing.*/
-    /*ifs.close();*/
+    std::ifstream ifs(argv[1], std::ifstream::in | std::ifstream::binary);
+    Timer timer; timer.Start(); // Start timing.
+    ifs >> g;
+    timer.Stop(); // Stop timing.
+    ifs.close();
 
-    /*std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;*/
+    std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
-    // Load in schedule.
-    auto schedule = load_sssp_schedule("out.skd");
-    std::cout << schedule;
-
-    /*// Run CPU benchmarks.*/
-    /*run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K, */
+    // Run CPU benchmarks.
+    /*run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K,*/
             /*SSSPCPU::one_to_one);*/
 
-    /*// Run GPU benchmarks.*/
-    /*constexpr int block_count = 64;*/
-    /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,*/
-            /*SSSPGPU::one_to_one, block_count, 1024);*/
-    /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,*/
-            /*SSSPGPU::warp_min, block_count, 1024);*/
+    // Run GPU benchmarks.
+    constexpr int block_count = 64;
+    run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
+            SSSPGPU::one_to_one, block_count, 1024);
+    run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
+            SSSPGPU::warp_min, block_count, 1024);
 
-    /*std::vector<int> thread_counts = {64, 128, 256, 512, 1024};*/
-    /*for (int thread_count : thread_counts) */
-        /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, */
-                /*Device::nvidia_quadro_rtx_4000, SSSPGPU::block_min,*/
-                /*block_count * (1024 / thread_count), thread_count);*/
+    std::vector<int> thread_counts = {64, 128, 256, 512, 1024};
+    for (int thread_count : thread_counts)
+        run_treebenchmark<SSSPGPUTreeBenchmark>(g,
+                Device::nvidia_quadro_rtx_4000, SSSPGPU::block_min,
+                block_count * (1024 / thread_count), thread_count);
 
     // Full kernel runs.
 #ifdef FULL_KERNEL
@@ -221,6 +217,9 @@ int main(int argc, char *argv[]) {
 
     // Run heterogeneous kernel.
     {
+        // Load in schedule.
+        auto schedule = load_sssp_schedule("out.skd");
+        std::cout << schedule;
         nid_t                      middle     = g.num_nodes / 16 * 2;
         graph_range_t              cpu_range  = { middle, g.num_nodes };
         std::vector<graph_range_t> gpu_ranges = { { 0, middle } };

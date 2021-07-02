@@ -32,12 +32,15 @@ public:
 protected:
     sssp_gpu_epoch_func epoch_kernel; // GPU epoch kernel.
 
-    offset_t   *cu_index;     // (GPU) graph indices.
-    wnode_t    *cu_neighbors; // (GPU) graph neighbors and weights.
+    offset_t   *cu_index;     // (GPU) subgraph indices.
+    wnode_t    *cu_neighbors; // (GPU) subgraph neighbors and weights.
     weight_t   *cu_dist;      // (GPU) distances.
     nid_t      *cu_updated;   // (GPU) update counter.
 
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
+
+private:
+    void copy_subgraph_to_device(const nid_t start_id, const nid_t end_id);
 };
 
 /**
@@ -69,17 +72,9 @@ SSSPGPUTreeBenchmark::SSSPGPUTreeBenchmark(
     , epoch_kernel(epoch_kernel_)
     , block_count(block_count_)
     , thread_count(thread_count_)
+    , cu_index(nullptr)
+    , cu_neighbors(nullptr)
 {
-    // Initialize GPU copy of graph.
-    size_t   index_size     = g->num_nodes * sizeof(offset_t);
-    size_t   neighbors_size = g->num_edges * sizeof(wnode_t);
-    CUDA_ERRCHK(cudaMalloc((void **) &cu_index, index_size));
-    CUDA_ERRCHK(cudaMalloc((void **) &cu_neighbors, neighbors_size));
-    CUDA_ERRCHK(cudaMemcpy(cu_index, g->index, index_size, 
-            cudaMemcpyHostToDevice));
-    CUDA_ERRCHK(cudaMemcpy(cu_neighbors, g->neighbors, neighbors_size, 
-            cudaMemcpyHostToDevice));
-
     // Initialize update counter.
     CUDA_ERRCHK(cudaMalloc((void **) &cu_updated, sizeof(nid_t)));
 
@@ -88,10 +83,8 @@ SSSPGPUTreeBenchmark::SSSPGPUTreeBenchmark(
 }
 
 SSSPGPUTreeBenchmark::~SSSPGPUTreeBenchmark() {
-    cudaFree(cu_index);
-    cudaFree(cu_neighbors);
-    cudaFree(cu_dist);
-    cudaFree(cu_updated);
+    CUDA_ERRCHK(cudaFree(cu_dist));
+    CUDA_ERRCHK(cudaFree(cu_updated));
 }
 
 /**
@@ -121,6 +114,9 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
     result.num_edges  = g->index[end_id] - g->index[start_id];
     result.avg_degree = static_cast<float>(result.num_edges) 
         / (end_id- start_id);
+
+    // Copy subgraph.
+    copy_subgraph_to_device(start_id, end_id);
 
     // Time kernel (avg of BENCHMARK_TIME_ITERS).
     double total_time = 0.0;
@@ -156,9 +152,40 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
 
     // Save results.
     result.millisecs = total_time / BENCHMARK_TIME_ITERS;
-    result.gteps      = result.num_edges / (result.millisecs / 1000) / 1e9;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9;
+
+    // Free subgraph.
+    CUDA_ERRCHK(cudaFree(cu_index));
+    CUDA_ERRCHK(cudaFree(cu_neighbors));
 
     return result;
+}
+
+__inline__
+void SSSPGPUTreeBenchmark::copy_subgraph_to_device(
+        const nid_t start_id, const nid_t end_id
+) {
+    // Get number of nodes and edges.
+    size_t index_size     = (end_id - start_id + 1) * sizeof(offset_t);
+    size_t neighbors_size = (g->index[end_id] - g->index[start_id])
+                            * sizeof(wnode_t);
+
+    // Make a down-shifted copy of the index. Index values in the graph will no 
+    // longer point to the same location in memory.
+    offset_t *subgraph_index = new offset_t[end_id - start_id + 1];
+    #pragma omp parallel for
+    for (int i = start_id; i <= end_id; i++)
+        subgraph_index[i - start_id] = g->index[i] - g->index[start_id];
+
+    // Allocate memory and copy subgraph over.
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_index, index_size));
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_neighbors, neighbors_size));
+    CUDA_ERRCHK(cudaMemcpy(cu_index, subgraph_index, 
+                index_size, cudaMemcpyHostToDevice));
+    CUDA_ERRCHK(cudaMemcpy(cu_neighbors, &g->neighbors[g->index[start_id]],
+                neighbors_size, cudaMemcpyHostToDevice));
+
+    delete[] subgraph_index;
 }
 
 segment_res_t benchmark_sssp_gpu(
