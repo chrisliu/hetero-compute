@@ -141,20 +141,21 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Load in graph.
-    CSRWGraph g;
-    std::cout << "Loading graph ..." << std::endl;
+    /*// Load in graph.*/
+    /*CSRWGraph g;*/
+    /*std::cout << "Loading graph ..." << std::endl;*/
 
-    std::ifstream ifs(argv[1], std::ifstream::in | std::ifstream::binary);
-    Timer timer; timer.Start(); // Start timing.
-    ifs >> g;
-    timer.Stop(); // Stop timing.
-    ifs.close();
+    /*std::ifstream ifs(argv[1], std::ifstream::in | std::ifstream::binary);*/
+    /*Timer timer; timer.Start(); // Start timing.*/
+    /*ifs >> g;*/
+    /*timer.Stop(); // Stop timing.*/
+    /*ifs.close();*/
 
-    std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
+    /*std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;*/
 
     // Load in schedule.
-    load_schedule("out.skd");
+    auto schedule = load_sssp_schedule("out.skd");
+    std::cout << schedule;
 
     /*// Run CPU benchmarks.*/
     /*run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K, */

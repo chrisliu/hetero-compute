@@ -14,8 +14,8 @@ class KernelSegment:
     def __init__(self, kernel_name: str, segment: int, exec_time: float):
         self.kernel_name = kernel_name
         self.segment     = segment # For scheduling algorithm.
-        self.seg_start   = segment # For contiguify.
-        self.seg_end     = segment # For contiguify.
+        self.seg_start   = segment # For contiguify (inclusive).
+        self.seg_end     = segment # For contiguify (inclusive).
         self.exec_time   = exec_time
 
     def __repr__(self) -> str:

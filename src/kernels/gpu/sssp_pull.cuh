@@ -7,6 +7,8 @@
 
 #include <iostream>
 #include <omp.h> 
+#include <ostream>
+#include <vector>
 
 #include "../kernel_types.h"
 #include "../../cuda.cuh"
@@ -273,8 +275,18 @@ void epoch_sssp_pull_gpu_one_to_one(
 
 /** Identifier for epoch kernels. */
 enum class SSSPGPU {
-    one_to_one, warp_min, block_min
+    one_to_one, warp_min, block_min, undefined
 };
+
+/** List of kernels available (no good iterator for enum classes). */
+std::vector<SSSPGPU> sssp_gpu_kernels = {
+    SSSPGPU::one_to_one, SSSPGPU::warp_min, SSSPGPU::block_min
+};
+
+std::vector<SSSPGPU> get_kernels([[maybe_unused]] SSSPGPU unused) {
+    // Using hack to overload function by return type.
+    return sssp_gpu_kernels;
+}
 
 /** 
  * Convert epoch kernel ID to its representation name (not as human-readable). 
@@ -288,8 +300,9 @@ std::string to_repr(SSSPGPU ker) {
         case SSSPGPU::one_to_one: return "sssp_gpu_onetoone";
         case SSSPGPU::warp_min:   return "sssp_gpu_warp_min";
         case SSSPGPU::block_min:  return "sssp_gpu_block_min";
+        case SSSPGPU::undefined:  
+        default:                  return "";
     }
-    return "";
 }
 
 /** 
@@ -304,8 +317,9 @@ std::string to_string(SSSPGPU ker) {
         case SSSPGPU::one_to_one: return "SSSP GPU one-to-one";
         case SSSPGPU::warp_min:   return "SSSP GPU warp-min";
         case SSSPGPU::block_min:  return "SSSP GPU block-min";
+        case SSSPGPU::undefined:  
+        default:                  return "undefined SSSP GPU kernel";
     }
-    return "";
 }
 
 /**
@@ -320,8 +334,14 @@ sssp_gpu_epoch_func get_kernel(SSSPGPU ker) {
         case SSSPGPU::one_to_one: return epoch_sssp_pull_gpu_one_to_one;
         case SSSPGPU::warp_min:   return epoch_sssp_pull_gpu_warp_min;
         case SSSPGPU::block_min:  return epoch_sssp_pull_gpu_block_min;
+        case SSSPGPU::undefined:  
+        default:                  return nullptr;
     }
-    return nullptr;
+}
+
+std::ostream &operator<<(std::ostream &os, SSSPGPU ker) {
+    os << to_string(ker);
+    return os;
 }
 
 #endif // SRC_KERNELS_GPU__KERNEL_SSSP_PULL_GPU_CUH

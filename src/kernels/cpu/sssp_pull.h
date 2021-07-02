@@ -160,8 +160,18 @@ void epoch_sssp_pull_cpu_one_to_one(
 
 /** Identifier for epoch kernels. */
 enum class SSSPCPU {
-    one_to_one
+    one_to_one, undefined
 };
+
+/** List of kernels available (no good iterator for enum classes). */
+std::vector<SSSPCPU> sssp_cpu_kernels = {
+    SSSPCPU::one_to_one
+};
+
+std::vector<SSSPCPU> get_kernels([[maybe_unused]] SSSPCPU unused) {
+    // Using hack to overload function by return type.
+    return sssp_cpu_kernels;
+}
 
 /** 
  * Convert epoch kernel ID to its representation name (not as human-readable).
@@ -173,8 +183,9 @@ enum class SSSPCPU {
 std::string to_repr(SSSPCPU ker) {
     switch (ker) {
         case SSSPCPU::one_to_one: return "sssp_cpu_onetoone";
+        case SSSPCPU::undefined:
+        default:                  return "";
     }
-    return "";
 }
 
 /** 
@@ -187,8 +198,9 @@ std::string to_repr(SSSPCPU ker) {
 std::string to_string(SSSPCPU ker) {
     switch (ker) {
         case SSSPCPU::one_to_one: return "SSSP CPU one-to-one";
+        case SSSPCPU::undefined:
+        default:                  return "undefined SSSP CPU kernel";
     }
-    return "";
 }
 
 /**
@@ -201,8 +213,14 @@ std::string to_string(SSSPCPU ker) {
 sssp_cpu_epoch_func get_kernel(SSSPCPU ker) {
     switch (ker) {
         case SSSPCPU::one_to_one: return epoch_sssp_pull_cpu_one_to_one;
+        case SSSPCPU::undefined:
+        default:                  return nullptr;
     }
-    return nullptr;
+}
+
+std::ostream &operator<<(std::ostream &os, SSSPCPU ker) {
+    os << to_string(ker);
+    return os;
 }
 
 #endif // SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H
