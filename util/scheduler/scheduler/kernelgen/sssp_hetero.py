@@ -100,7 +100,6 @@ def generate_sssp_hetero_source_code(scheds: List[DeviceSchedule]) -> str:
                        for devsched in scheds
                        for kerseg in devsched.schedule) + 1
     num_gpus     = len(gpu_segments)
-    print(parse_kernel(gpu_segments[0][0].kernel_name))
 
     ###########################################################################
     ##    Helper Generator Functions                                         ##
@@ -170,7 +169,7 @@ f"""
 #pragma omp parallel
 {{
     {to_epochkernel_funcname(kernel.kerid)}(g, dist, 
-            seg_ranges[{kerseg.seg_start}]), seg_ranges[{kerseg.seg_end + 1}],
+            seg_ranges[{kerseg.seg_start}], seg_ranges[{kerseg.seg_end + 1}],
             omp_get_thread_num(), omp_get_num_threads(), cpu_updated);
 }}
 """.strip() + '\n'
@@ -211,7 +210,7 @@ f"""
 CUDA_ERRCHK(cudaMemcpyAsync(
         dist + block_ranges[{2 * idx}],
         cu_dists[{devid}] + block_ranges[{2 * idx}],
-        (block_ranges[{2 * idx + 1}] - block_ranges[{2 * idx}] + 1) * sizeof(weight_t),
+        (block_ranges[{2 * idx + 1}] - block_ranges[{2 * idx}]) * sizeof(weight_t),
         cudaMemcpyDeviceToHost));
 """.strip() + '\n'
         return code.strip()
@@ -228,7 +227,7 @@ for (int i = 0; i < num_gpus; i++) {{
     CUDA_ERRCHK(cudaMemcpyAsync(
         cu_dists[i] + seg_ranges[{kerseg.seg_start}],
         dist + seg_ranges[{kerseg.seg_start}],
-        (seg_ranges[{kerseg.seg_end + 1}] - seg_ranges[{kerseg.seg_start}] + 1) * sizeof(weight_t),
+        (seg_ranges[{kerseg.seg_end + 1}] - seg_ranges[{kerseg.seg_start}]) * sizeof(weight_t),
         cudaMemcpyHostToDevice));
 }}
 """.strip() + '\n'
@@ -260,6 +259,7 @@ f"""
 /**
  * Runs SSSP kernel heterogeneously across the CPU and GPU. Synchronization 
  * occurs in serial. 
+ * SSSP heterogeneous kernel for {num_gpus} GPU{'s' if num_gpus > 1 else ''}.
  *
  * Parameters:
  *   - g         <- graph.
@@ -269,16 +269,14 @@ f"""
  *   Execution time in milliseconds.
  */
 double sssp_pull_heterogeneous(const CSRWGraph &g, 
-        const weight_t *init_dist, weight_t ** const ret_dist,
+        const weight_t *init_dist, weight_t ** const ret_dist
 ) {{
-    CONDCHK(gpu_epoch_kernel != epoch_sssp_pull_gpu_one_to_one
-                and thread_count % 32 != 0, 
-            "thread count must be divisible by 32");
-
-    // Copy graph.
+    // Configuration.
+    constexpr int num_gpus     = {num_gpus};
     constexpr int num_blocks   = {num_blocks};
     constexpr int num_segments = {num_segments};
     
+    // Copy graph.
     nid_t *seg_ranges = compute_equal_edge_ranges(g, num_segments);
     
     /// Block ranges to reduce irregular memory acceses.
@@ -301,8 +299,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         dist[i] = init_dist[i];
 
     /// GPU Distances.
-    constexpr int num_gpus = {num_gpus};
-    nid_t *cu_dists[num_gpus];
+    weight_t *cu_dists[num_gpus];
     for (int i = 0; i < num_gpus; i++) {{        
         CUDA_ERRCHK(cudaMalloc((void **) &cu_dists[i], dist_size));
         CUDA_ERRCHK(cudaMemcpy(cu_dists[i], init_dist, dist_size,
@@ -348,10 +345,14 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         (*ret_dist)[i] = dist[i];
 
     // Free memory.
-    CUDA_ERRCHK(cudaFree(cu_index));
-    CUDA_ERRCHK(cudaFree(cu_neighbors));
-    CUDA_ERRCHK(cudaFree(cu_updated));
-    CUDA_ERRCHK(cudaFree(cu_dist));
+    for (int i = 0; i < num_blocks; i++) {{
+        CUDA_ERRCHK(cudaFree(cu_indices[i]));
+        CUDA_ERRCHK(cudaFree(cu_neighbors[i]));
+    }}
+    for (int i = 0; i < num_gpus; i++) {{
+        CUDA_ERRCHK(cudaFree(cu_updateds[i]));
+        CUDA_ERRCHK(cudaFree(cu_dists[i]));
+    }}
     CUDA_ERRCHK(cudaFreeHost(dist));
     delete[] seg_ranges;
 

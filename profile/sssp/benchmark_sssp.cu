@@ -12,7 +12,7 @@
 #include "../../src/util.h"
 #include "../../src/benchmarks/gpu_benchmark.cuh"
 #include "../../src/benchmarks/cpu_benchmark.h"
-//#include "../../src/benchmarks/heterogeneous_benchmark.cuh"
+#include "../../src/benchmarks/heterogeneous_benchmark.cuh"
 #include "../../src/kernels/cpu/sssp_pull.h"
 #include "../../src/kernels/gpu/sssp_pull.cuh"
 
@@ -26,8 +26,10 @@
 #define PRINT_RESULTS
 // Save results to YAML files.
 #define SAVE_RESULTS
+// Run epoch kernels.
+/*#define RUN_EPOCH_KERNELS*/
 // Run full kernels.
-/*#define FULL_KERNEL*/
+#define RUN_FULL_KERNELS
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
@@ -153,6 +155,7 @@ int main(int argc, char *argv[]) {
 
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
+#ifdef RUN_EPOCH_KERNELS
     // Run CPU benchmarks.
     run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K,
             SSSPCPU::one_to_one);
@@ -169,21 +172,22 @@ int main(int argc, char *argv[]) {
         run_treebenchmark<SSSPGPUTreeBenchmark>(g,
                 Device::nvidia_quadro_rtx_4000, SSSPGPU::block_min,
                 block_count * (1024 / thread_count), thread_count);
+#endif // RUN_EPOCH_KERNELS
 
     // Full kernel runs.
-#ifdef FULL_KERNEL
+#ifdef RUN_FULL_KERNELS
     weight_t *ret_dist  = nullptr;
     weight_t *init_dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
         init_dist[i] = INF_WEIGHT;
     init_dist[0] = 0; // Arbitrarily set highest degree node to source.
-
+    
     // Run CPU kernel.
     {
         std::cout << "SSSP CPU:" << std::endl;
-        segment_res_t res = benchmark_sssp_cpu(g, epoch_sssp_pull_cpu,
-                init_dist, &ret_dist);
+        segment_res_t res = benchmark_sssp_cpu(g,
+                epoch_sssp_pull_cpu_one_to_one, init_dist, &ret_dist);
         std::cout << res;
         delete[] ret_dist;
     }
@@ -191,8 +195,8 @@ int main(int argc, char *argv[]) {
     // Run GPU naive kernel.
     {
         std::cout << "SSSP GPU naive:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_naive,
-                init_dist, &ret_dist);
+        segment_res_t res = benchmark_sssp_gpu(g,
+                epoch_sssp_pull_gpu_one_to_one, init_dist, &ret_dist);
         std::cout << res;
         delete[] ret_dist;
     }
@@ -200,8 +204,8 @@ int main(int argc, char *argv[]) {
     // Run GPU warp min kernel.
     {
         std::cout << "SSSP GPU warp min:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_warp_min,
-                init_dist, &ret_dist);
+        segment_res_t res = benchmark_sssp_gpu(g,
+                epoch_sssp_pull_gpu_warp_min, init_dist, &ret_dist);
         std::cout << res;
         delete[] ret_dist;
     }
@@ -209,24 +213,18 @@ int main(int argc, char *argv[]) {
     // Run GPU block min kernel.
     {
         std::cout << "SSSP GPU block min:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g, epoch_sssp_pull_gpu_block_min,
-                init_dist, &ret_dist);
+        segment_res_t res = benchmark_sssp_gpu(g,
+                epoch_sssp_pull_gpu_block_min, init_dist, &ret_dist);
         std::cout << res;
         delete[] ret_dist;
-   }
+    }
 
     // Run heterogeneous kernel.
     {
         // Load in schedule.
-        auto schedule = load_sssp_schedule("out.skd");
-        std::cout << schedule;
-        nid_t                      middle     = g.num_nodes / 16 * 2;
-        graph_range_t              cpu_range  = { middle, g.num_nodes };
-        std::vector<graph_range_t> gpu_ranges = { { 0, middle } };
         std::cout << "SSSP heterogeneous:" << std::endl;
         segment_res_t res = benchmark_sssp_heterogeneous(g,
-                epoch_sssp_pull_cpu, epoch_sssp_pull_gpu_warp_min,
-                cpu_range, gpu_ranges, init_dist, &ret_dist);
+                init_dist, &ret_dist);
         std::cout << res;
         delete[] ret_dist;
     }

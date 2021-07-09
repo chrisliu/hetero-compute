@@ -41,7 +41,10 @@ def main():
     scheduler.contiguify_schedule(schedule)
     write_schedule(schedule, 'out.skd')
 
-    print(scheduler.kernelgen.generate_sssp_hetero_source_code(schedule))
+    # Write out SSSP hetero file.
+    with open('sssp_pull.cuh', 'w') as ofs:
+        ofs.write(
+            scheduler.kernelgen.generate_sssp_hetero_source_code(schedule))
 
 def create_parser() -> argparse.ArgumentParser:
     """Returns a valid python argument parser."""

@@ -88,24 +88,18 @@ int main(int argc, char *argv[]) {
         delete[] dist;
     }
 
-    /*// Check SSSP heterogeneous kernel.*/
-    /*{*/
-        /*weight_t                  *dist       = nullptr;*/
-        /*nid_t                      middle     = g.num_nodes / 16 * 2;*/
-        /*graph_range_t              cpu_range  = { middle - 100, middle};*/
-        /*std::vector<graph_range_t> gpu_ranges = { { 0, middle - 100},*/
-                                                  /*{ middle, g.num_nodes } };*/
-        /*sssp_pull_heterogeneous(g,*/
-                /*epoch_sssp_pull_cpu, epoch_sssp_pull_gpu_warp_min,*/
-                /*cpu_range, gpu_ranges, init_dist, &dist);*/
+    // Check SSSP heterogeneous kernel.
+    {
+        weight_t *dist = nullptr;
+        sssp_pull_heterogeneous(g, init_dist, &dist);
 
-        /*std::cout << "Verifying SSSP heterogeneous kernel ..." << std::endl;*/
-        /*bool success = verify(oracle_dist, dist, g.num_nodes);*/
-        /*std::cout << " > Verification " << (success ? "succeeded" : "failed")*/
-            /*<< "!" << std::endl;*/
+        std::cout << "Verifying SSSP heterogeneous kernel ..." << std::endl;
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
-        /*delete[] dist;*/
-    /*}*/
+        delete[] dist;
+    }
 
     return EXIT_SUCCESS;
 }
