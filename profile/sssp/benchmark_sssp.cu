@@ -8,11 +8,11 @@
 #include <vector>
 
 #include "../../src/graph.h"
-#include "../../src/scheduler.h"
+#include "../../src/schedule.h"
 #include "../../src/util.h"
 #include "../../src/benchmarks/gpu_benchmark.cuh"
 #include "../../src/benchmarks/cpu_benchmark.h"
-#include "../../src/benchmarks/heterogeneous_benchmark.cuh"
+//#include "../../src/benchmarks/heterogeneous_benchmark.cuh"
 #include "../../src/kernels/cpu/sssp_pull.h"
 #include "../../src/kernels/gpu/sssp_pull.cuh"
 
@@ -31,7 +31,7 @@
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
-#define SEGMENTS 1 << 4
+#define SEGMENTS 8
 #else
 // Current/Up to (inclusive) this depth.
 #define DEPTH 6
@@ -154,8 +154,8 @@ int main(int argc, char *argv[]) {
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
     // Run CPU benchmarks.
-    /*run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K,*/
-            /*SSSPCPU::one_to_one);*/
+    run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K,
+            SSSPCPU::one_to_one);
 
     // Run GPU benchmarks.
     constexpr int block_count = 64;

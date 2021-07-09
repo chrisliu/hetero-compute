@@ -67,6 +67,54 @@ public:
     }
 };
 
+/*****************************************************************************
+ ***** Helper Functions ******************************************************
+ *****************************************************************************/
+
+/**
+ * Computes the starting and ending node IDs for each segments such that
+ * the average degree of each segment is roughly (# of edges) / @num_segments.
+ * Parameters:
+ *   - num_segments <- number of segments.
+ * Returns:
+ *   List of length @num_segments + 1. For each segment i, the segment's range
+ *   is defined as [range[i], range[i + 1]). Memory is dynamically allocated so 
+ *   it must be freed to prevent memory leaks.
+ */
+nid_t *compute_equal_edge_ranges(const CSRWGraph &g, const nid_t num_segments) {
+    nid_t *seg_ranges = new nid_t[num_segments + 1];    
+    seg_ranges[0] = 0;
+
+    offset_t avg_deg = g.num_edges / num_segments;
+
+    nid_t end_id   = 0;
+    int   seg_id   = 0;
+    int   seg_deg  = 0;
+
+    while (end_id != g.num_nodes) {
+        seg_deg += g.get_degree(end_id);
+
+        // If segment exceeds average degree, save it and move on to next.
+        if (seg_deg >= avg_deg) {
+            seg_ranges[seg_id + 1] = end_id;
+            seg_deg = 0; // Reset segment degree.
+            seg_id++;
+        }
+
+        end_id++;
+    }
+
+    // If last segment hasn't been saved yet (almost guaranteed to happen).
+    if (seg_id != num_segments)
+        seg_ranges[seg_id + 1] = end_id;
+
+    return seg_ranges;
+}
+
+/*****************************************************************************
+ ***** Graph Input Functions *************************************************
+ *****************************************************************************/
+
 /**
  * Deserializes GAPBS generated graph into new data structure.
  */
@@ -89,7 +137,7 @@ std::istream& operator>>(std::istream &is, CSRWGraph &g) {
 }
 
 /**
- * Helper function that deserializes graph from filename.
+ * Wrapper function that deserializes graph from filename.
  */
 __inline__
 CSRWGraph load_graph_from_file(char *filename) {

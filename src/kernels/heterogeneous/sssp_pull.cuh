@@ -12,6 +12,7 @@
 #include "../gpu/sssp_pull.cuh"
 #include "../../cuda.cuh"
 #include "../../graph.h"
+#include "../../schedule.h"
 #include "../../util.h"
 
 /**
@@ -22,26 +23,18 @@
  * TODO: only supports one contiguous block for each the CPU and GPU kernels.
  *
  * Parameters:
- *   - g                <- graph.
- *   - cpu_epoch_kernel <- cpu epoch kernel.
- *   - gpu_epoch_kernel <- gpu epoch kernel.
- *   - cpu_range        <- range of CPU kernel.
- *   - gpu_ranges       <- ranges for GPU kernel.
- *   - init_dist        <- initial distance array.
- *   - ret_dist         <- pointer to the address of the return distance array.
- *   - block_count      <- (optional) number of blocks.
- *   - thread_count     <- (optional) number of threads.
+ *   - g            <- graph.
+ *   - schedule     <- heterogeneous SSSP schedule.
+ *   - init_dist    <- initial distance array.
+ *   - ret_dist     <- pointer to the address of the return distance array.
+ *   - block_count  <- (optional) number of blocks.
+ *   - thread_count <- (optional) number of threads.
  * Returns:
  *   Execution time in milliseconds.
  */
 double sssp_pull_heterogeneous(
-        const CSRWGraph &g, 
-        sssp_cpu_epoch_func cpu_epoch_kernel, 
-        sssp_gpu_epoch_func gpu_epoch_kernel,
-        const graph_range_t cpu_range,
-        const std::vector<graph_range_t> gpu_ranges,
+        const CSRWGraph &g, SSSPHeteroSchedule &schedule,
         const weight_t *init_dist, weight_t ** const ret_dist,
-        int block_count = 64, int thread_count = 1024
 ) {
     CONDCHK(gpu_epoch_kernel != epoch_sssp_pull_gpu_one_to_one
                 and thread_count % 32 != 0, 
@@ -140,5 +133,10 @@ double sssp_pull_heterogeneous(
 
     return timer.Millisecs();
 }
+
+/******************************************************************************
+ ***** Helper Functions *******************************************************
+ ******************************************************************************/
+
 
 #endif // SRC_KERNELS_HETEROGENEOUS__SSSP_PULL_CUH

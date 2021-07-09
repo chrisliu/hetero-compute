@@ -15,7 +15,8 @@ def main():
 
     # Load profiles and query device counts.
     profiles = load_profiles(args.profiles)
-    hardware_config = query_devices(profiles)
+    #hardware_config = query_devices(profiles)
+    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 1}
     profiles = filter_profiles(profiles, hardware_config)
 
     # Schedule.
@@ -39,6 +40,8 @@ def main():
     # Save schedule.
     scheduler.contiguify_schedule(schedule)
     write_schedule(schedule, 'out.skd')
+
+    print(scheduler.kernelgen.generate_sssp_hetero_source_code(schedule))
 
 def create_parser() -> argparse.ArgumentParser:
     """Returns a valid python argument parser."""

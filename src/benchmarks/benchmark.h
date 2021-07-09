@@ -6,7 +6,6 @@
 #define SRC_BENCHMARKS__BENCHMARK_H
 
 // Number of warmup rounds.
-#include <string>
 #define BENCHMARK_WARMUP_ITERS 5
 // Number of rounds to average.
 #define BENCHMARK_TIME_ITERS 5
@@ -17,6 +16,7 @@
 #include <omp.h>
 #include <ostream>
 #include <random>
+#include <string>
 
 #include "../graph.h"
 
@@ -244,43 +244,11 @@ layer_res_t TreeBenchmark::layer_microbenchmark(const nid_t num_segments) {
 }
 
 /**
- * Computes the starting and ending node IDs for each segments such that
- * the average degree of each segment is roughly (# of edges) / @num_segments.
- * Parameters:
- *   - num_segments <- number of segments.
- * Returns:
- *   List of length @num_segments + 1. For each segment i, the segment's range
- *   is defined as [range[i], range[i + 1]). Memory is dynamically allocated so 
- *   it must be freed to prevent memory leaks.
+ * Wrapper for compute_equal_edge_ranges.
  */
+__inline__
 nid_t *TreeBenchmark::compute_ranges(const nid_t num_segments) const {
-    nid_t *seg_ranges = new nid_t[num_segments + 1];    
-    seg_ranges[0] = 0;
-
-    offset_t avg_deg = g->num_edges / num_segments;
-
-    nid_t end_id   = 0;
-    int   seg_id   = 0;
-    int   seg_deg  = 0;
-
-    while (end_id != g->num_nodes) {
-        seg_deg += g->get_degree(end_id);
-
-        // If segment exceeds average degree, save it and move on to next.
-        if (seg_deg >= avg_deg) {
-            seg_ranges[seg_id + 1] = end_id;
-            seg_deg = 0; // Reset segment degree.
-            seg_id++;
-        }
-
-        end_id++;
-    }
-
-    // If last segment hasn't been saved yet (almost guaranteed to happen).
-    if (seg_id != num_segments)
-        seg_ranges[seg_id + 1] = end_id;
-
-    return seg_ranges;
+    return compute_equal_edge_ranges(*g, num_segments);
 }
 
 SSSPTreeBenchmark::~SSSPTreeBenchmark() {

@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <functional>
-#include <iostream> // TEMP
+#include <iostream>
 #include <iterator>
 #include <ostream>
 #include <string>
@@ -86,7 +86,6 @@ struct SSSPHeteroSchedule {
                                            // (not blocks).
 };
 
-
 /** SSSP CPU block emitter. */
 std::ostream &operator<<(std::ostream &os, SSSPCPUScheduleBlock &block) {
     os << "SSSP CPU Block" << std::endl
@@ -142,6 +141,13 @@ EnumT get_kernel_id(std::string kerstr) {
     return EnumT::undefined; // TODO: enum type must have undefined.
 }
 
+/**
+ * Parses and returns a heterogeneous SSSP schedule.
+ * Parameters:
+ *   - fname <- name of the schedule file.
+ * Returns:
+ *   A heterogeneous SSSP schedule.
+ */
 SSSPHeteroSchedule load_sssp_schedule(std::string fname) {
     // Open file.
     std::ifstream ifs(fname, std::ifstream::in);
