@@ -73,8 +73,8 @@ def parse_kernel(kerstr: str) -> Kernel:
     if kernel.is_gpu:
         bt_str              = kerstr[len(ker_to_string(k)) + 1:]
         b_str, t_str        = bt_str.split(' ')
-        kernel.block_count  = str(b_str)
-        kernel.thread_count = str(t_str)
+        kernel.block_count  = int(b_str)
+        kernel.thread_count = int(t_str)
 
     return kernel
 
