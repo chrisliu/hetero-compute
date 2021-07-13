@@ -23,8 +23,11 @@
 // Mask for all warps.
 #define ALLWARP (1 << warpSize - 1) 
 
-template <typename T, typename ...Ts>
-using is_contained = std::disjunction<std::is_same<T, Ts>...>;
+// https://stackoverflow.com/questions/16252902/sfinae-set-of-types-contains-the-type
+template <typename T, typename ...> struct is_contained : std::false_type {};
+template <typename T, typename Head, typename ...Tail>
+struct is_contained<T, Head, Tail...> : std::integral_constant<bool,
+    std::is_same<T, Head>::value || is_contained<T, Tail...>::value> {};
 
 /**
  * Only thread of warp id = 0 receive a warp-level minimum.
@@ -36,8 +39,8 @@ using is_contained = std::disjunction<std::is_same<T, Ts>...>;
  *   minimum value across all warps (only for thread of warp id = 0).
  */
 template <typename T,
-          typename = std::enable_if_t<is_contained<T, int, unsigned int,
-             long, unsigned long, long long, unsigned long long, float,
+          typename = typename std::enable_if<is_contained<T, int, unsigned int, 
+             long, unsigned long, long long, unsigned long long, float, 
              double>::value>>
 __inline__ __device__
 T warp_min(T val) {
@@ -57,7 +60,7 @@ T warp_min(T val) {
  *   minimum value across all warps.
  */
 template <typename T,
-          typename = std::enable_if_t<is_contained<T, int, unsigned int, 
+          typename = typename std::enable_if<is_contained<T, int, unsigned int, 
              long, unsigned long, long long, unsigned long long, float, 
              double>::value>>
 __inline__ __device__

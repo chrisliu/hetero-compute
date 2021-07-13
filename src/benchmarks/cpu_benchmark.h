@@ -91,7 +91,8 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(
 
     // Save results.
     result.millisecs = total_time / BENCHMARK_TIME_ITERS;
-    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
+    // TODO: divided by 2 is a conservative estimate.
 
     return result;
 }
@@ -118,7 +119,8 @@ segment_res_t benchmark_sssp_cpu(
 
     // Save results.
     result.millisecs = total_time / BENCHMARK_TIME_ITERS;
-    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
+    // TODO: divided by 2 is a conservative estimate.
 
     return result;
 }

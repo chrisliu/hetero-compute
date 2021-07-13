@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "../../src/graph.h"
-#include "../../src/schedule.h"
 #include "../../src/util.h"
 #include "../../src/benchmarks/gpu_benchmark.cuh"
 #include "../../src/benchmarks/cpu_benchmark.h"
@@ -27,17 +26,22 @@
 // Save results to YAML files.
 #define SAVE_RESULTS
 // Run epoch kernels.
-#define RUN_EPOCH_KERNELS
+/*#define RUN_EPOCH_KERNELS*/
 // Run full kernels.
 #define RUN_FULL_KERNELS
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
-#define SEGMENTS 8
+#define SEGMENTS 16
 #else
 // Current/Up to (inclusive) this depth.
 #define DEPTH 6
 #endif // ONLY_LAYER
+
+#define NUM_BLOCKS 256
+
+#define DEVCPU Device::intel_xeon_e5_2686
+#define DEVGPU Device::nvidia_tesla_m60
 
 /******************************************************************************
  ***** Helper Functions *******************************************************
@@ -157,21 +161,20 @@ int main(int argc, char *argv[]) {
 
 #ifdef RUN_EPOCH_KERNELS
     // Run CPU benchmarks.
-    run_treebenchmark<SSSPCPUTreeBenchmark>(g, Device::intel_i7_9700K,
+    run_treebenchmark<SSSPCPUTreeBenchmark>(g, DEVCPU,
             SSSPCPU::one_to_one);
 
     // Run GPU benchmarks.
-    constexpr int block_count = 64;
-    run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
-            SSSPGPU::one_to_one, block_count, 1024);
-    run_treebenchmark<SSSPGPUTreeBenchmark>(g, Device::nvidia_quadro_rtx_4000,
-            SSSPGPU::warp_min, block_count, 1024);
+    run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,
+            SSSPGPU::one_to_one, NUM_BLOCKS, 1024);
+    run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,
+            SSSPGPU::warp_min, NUM_BLOCKS, 1024);
 
     std::vector<int> thread_counts = {64, 128, 256, 512, 1024};
     for (int thread_count : thread_counts)
         run_treebenchmark<SSSPGPUTreeBenchmark>(g,
-                Device::nvidia_quadro_rtx_4000, SSSPGPU::block_min,
-                block_count * (1024 / thread_count), thread_count);
+                DEVGPU, SSSPGPU::block_min,
+                NUM_BLOCKS * (1024 / thread_count), thread_count);
 #endif // RUN_EPOCH_KERNELS
 
     // Full kernel runs.
@@ -183,41 +186,44 @@ int main(int argc, char *argv[]) {
         init_dist[i] = INF_WEIGHT;
     init_dist[0] = 0; // Arbitrarily set highest degree node to source.
     
-    // Run CPU kernel.
-    {
-        std::cout << "SSSP CPU:" << std::endl;
-        segment_res_t res = benchmark_sssp_cpu(g,
-                epoch_sssp_pull_cpu_one_to_one, init_dist, &ret_dist);
-        std::cout << res;
-        delete[] ret_dist;
-    }
+    /*// Run CPU kernel.*/
+    /*{*/
+        /*std::cout << "SSSP CPU:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_cpu(g,*/
+                /*epoch_sssp_pull_cpu_one_to_one, init_dist, &ret_dist);*/
+        /*std::cout << res;*/
+        /*delete[] ret_dist;*/
+    /*}*/
 
-    // Run GPU naive kernel.
-    {
-        std::cout << "SSSP GPU naive:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_one_to_one, init_dist, &ret_dist);
-        std::cout << res;
-        delete[] ret_dist;
-    }
+    /*// Run GPU naive kernel.*/
+    /*{*/
+        /*std::cout << "SSSP GPU naive:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_gpu(g,*/
+                /*epoch_sssp_pull_gpu_one_to_one, init_dist, &ret_dist,
+                  NUM_BLOCKS);*/
+        /*std::cout << res;*/
+        /*delete[] ret_dist;*/
+    /*}*/
 
     // Run GPU warp min kernel.
     {
         std::cout << "SSSP GPU warp min:" << std::endl;
         segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_warp_min, init_dist, &ret_dist);
+                epoch_sssp_pull_gpu_warp_min, init_dist, &ret_dist,
+                NUM_BLOCKS);
         std::cout << res;
         delete[] ret_dist;
     }
 
-    // Run GPU block min kernel.
-    {
-        std::cout << "SSSP GPU block min:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_block_min, init_dist, &ret_dist);
-        std::cout << res;
-        delete[] ret_dist;
-    }
+    /*// Run GPU block min kernel.*/
+    /*{*/
+        /*std::cout << "SSSP GPU block min:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_gpu(g,*/
+                /*epoch_sssp_pull_gpu_block_min, init_dist, &ret_dist,
+                  NUM_BLOCKS);*/
+        /*std::cout << res;*/
+        /*delete[] ret_dist;*/
+    /*}*/
 
     // Run heterogeneous kernel.
     {

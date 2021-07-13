@@ -14,9 +14,6 @@ from scheduler.scheduler import (
     KernelSegment
 )
 
-MEMASYNC_THRESHOLD = 1 # If number of GPUs > memsetasync_threshold,
-                       # use cuda Async for memset and memcpy(updated).
-
 ###############################################################################
 ##### Enums ###################################################################
 ###############################################################################
@@ -104,6 +101,12 @@ def generate_sssp_hetero_source_code(scheds: List[DeviceSchedule]) -> str:
     ###########################################################################
     ##    Helper Generator Functions                                         ##
     ###########################################################################
+    def generate_gpu_blocks() -> str:
+        gpu_blocks = gpu_prefix_sum + \
+            [gpu_prefix_sum[-1] + len(gpu_segments[-1])]
+        gpu_blocks = [str(block) for block in gpu_blocks]
+        return f'constexpr int gpu_blocks[] = {{{", ".join(gpu_blocks)}}};'
+
     def generate_block_ranges() -> str:
         code = ''
         for devid, devsched in enumerate(gpu_segments):
@@ -116,35 +119,10 @@ block_ranges[{2 * idx + 1}] = seg_ranges[{kerseg.seg_end + 1}]; // Block {idx} E
 """.strip() + '\n'
         return code.strip()
 
-    def generate_cu_graph_copy() -> str:
-        code = \
-"""
-for (int i = 0; i < num_blocks; i++)
-    copy_subgraph_to_device(g, &cu_indices[i], &cu_neighbors[i],
-            block_ranges[2 * i], block_ranges[2 * i + 1]);
-"""
-        return code.strip()
-
-    def generate_updateds_reset() -> str:
-        code = \
-"""
-updated = cpu_updated = 0;          
-""" + \
-("""
-for (int i = 0; i < num_gpus; i++)
-    CUDA_ERRCHK(cudaMemset(cu_updateds[i], 0, sizeof(nid_t)));
-""" 
-if num_gpus <= MEMASYNC_THRESHOLD else
-"""
-for (int i = 0; i < num_gpus; i++)
-    CUDA_ERRCHK(cudaMemsetAsync(cu_updateds[i], 0, sizeof(nid_t)));
-CUDA_ERRCHK(cudaDeviceSynchronize);
-""")
-        return code.strip()
-
     def generate_gpu_kernel_launches() -> str:
         code = ''
         for devid, devsched in enumerate(gpu_segments):
+            code += f'CUDA_ERRCHK(cudaSetDevice({devid}));' + '\n'
             for kerid, kerseg in enumerate(devsched):
                 idx    = gpu_prefix_sum[devid] + kerid
                 kernel = parse_kernel(kerseg.kernel_name)
@@ -175,46 +153,6 @@ f"""
 """.strip() + '\n'
         return code.strip()
 
-    def generate_updateds_synchronize() -> str:
-        code = \
-"""
-nid_t tmp_updated;
-for (int i = 0; i < num_gpus; i++) {
-    CUDA_ERRCHK(cudaMemcpy(&tmp_updated, cu_updateds[i], sizeof(nid_t),
-            cudaMemcpyDeviceToHost));
-    updated += tmp_updated;
-}
-updated += cpu_updated;
-"""\
-if num_gpus <= MEMASYNC_THRESHOLD else\
-"""
-nid_t tmp_updated[num_gpus];
-for (int i = 0; i < num_gpus; i++)
-    CUDA_ERRCHK(cudaMemcpyAsync(&tmp_updated, cu_updateds[i], sizeof(nid_t),
-            cudaMemcpyDeviceToHost));
-updated += cpu_updated;
-cudaDeviceSynchronize();
-for (int i = 0; i < num_gpus; i++) 
-    updated += tmp_updated[i];
-"""
-        return code.strip()
-
-    def generate_distance_DtoH_synchronize() -> str:
-        code = ''
-        for devid, devsched in enumerate(gpu_segments):
-            for kerid, kerseg in enumerate(devsched):
-                idx    = gpu_prefix_sum[devid] + kerid
-                kernel = parse_kernel(kerseg.kernel_name)
-                code += \
-f"""
-CUDA_ERRCHK(cudaMemcpyAsync(
-        dist + block_ranges[{2 * idx}],
-        cu_dists[{devid}] + block_ranges[{2 * idx}],
-        (block_ranges[{2 * idx + 1}] - block_ranges[{2 * idx}]) * sizeof(weight_t),
-        cudaMemcpyDeviceToHost));
-""".strip() + '\n'
-        return code.strip()
-
     def generate_distance_HtoD_synchronize() -> str:
         code = ''
         cpu_schedule = next(filter(lambda devsched: 
@@ -223,9 +161,9 @@ CUDA_ERRCHK(cudaMemcpyAsync(
         for kerseg in cpu_schedule.schedule:
             code += \
 f""" 
-for (int i = 0; i < num_gpus; i++) {{
+for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
     CUDA_ERRCHK(cudaMemcpyAsync(
-        cu_dists[i] + seg_ranges[{kerseg.seg_start}],
+        cu_dists[cur_gpu] + seg_ranges[{kerseg.seg_start}],
         dist + seg_ranges[{kerseg.seg_start}],
         (seg_ranges[{kerseg.seg_end + 1}] - seg_ranges[{kerseg.seg_start}]) * sizeof(weight_t),
         cudaMemcpyHostToDevice));
@@ -250,10 +188,10 @@ f"""
 #include <vector>
 
 #include "../kernel_types.h"
+#include "../cpu/sssp_pull.h"
 #include "../gpu/sssp_pull.cuh"
 #include "../../cuda.cuh"
 #include "../../graph.h"
-#include "../../schedule.h"
 #include "../../util.h"
 
 /**
@@ -280,13 +218,23 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
     nid_t *seg_ranges = compute_equal_edge_ranges(g, num_segments);
     
     /// Block ranges to reduce irregular memory acceses.
+    {indent_after(generate_gpu_blocks())}
     nid_t block_ranges[num_blocks * 2];
+
     {indent_after(generate_block_ranges())}
 
     /// Actual graphs on GPU memory.
     offset_t *cu_indices[num_blocks];
     wnode_t  *cu_neighbors[num_blocks];
-    {indent_after(generate_cu_graph_copy())}
+
+    for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
+        CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+        for (int block = gpu_blocks[cur_gpu]; block < gpu_blocks[cur_gpu + 1];
+                block++) 
+            copy_subgraph_to_device(g,
+                    &cu_indices[block], &cu_neighbors[block],
+                    block_ranges[2 * block], block_ranges[2 * block + 1]);
+    }}
 
     // Distance.
     size_t   dist_size = g.num_nodes * sizeof(weight_t);
@@ -300,9 +248,10 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
 
     /// GPU Distances.
     weight_t *cu_dists[num_gpus];
-    for (int i = 0; i < num_gpus; i++) {{        
-        CUDA_ERRCHK(cudaMalloc((void **) &cu_dists[i], dist_size));
-        CUDA_ERRCHK(cudaMemcpy(cu_dists[i], init_dist, dist_size,
+    for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{        
+        CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+        CUDA_ERRCHK(cudaMalloc((void **) &cu_dists[cur_gpu], dist_size));
+        CUDA_ERRCHK(cudaMemcpy(cu_dists[cur_gpu], init_dist, dist_size,
             cudaMemcpyHostToDevice));
     }}
 
@@ -310,31 +259,80 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
     nid_t updated     = 1;
     nid_t cpu_updated = 0;
     nid_t *cu_updateds[num_gpus];
-    for (int i = 0; i < num_gpus; i++)
-        CUDA_ERRCHK(cudaMalloc((void **) &cu_updateds[i], sizeof(nid_t)));
+    for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
+        CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+        CUDA_ERRCHK(cudaMalloc((void **) &cu_updateds[cur_gpu], 
+                sizeof(nid_t)));
+    }}
 
     // Start kernel!
     Timer timer; timer.Start();
     while (updated != 0) {{
-        {indent_after(generate_updateds_reset(), 8)}
+        // Reset update counters.
+        updated = cpu_updated = 0;          
+        for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
+            CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+            CUDA_ERRCHK(cudaMemsetAsync(cu_updateds[cur_gpu], 0, 
+                    sizeof(nid_t)));
+        }}
 
         // Launch GPU epoch kernels.
+        // Implicit CUDA device synchronize at the start of kernels.
         {indent_after(generate_gpu_kernel_launches(), 8)}
 
         // Launch CPU epoch kernels.
         {indent_after(generate_cpu_kernel_launches(), 8)}
 
-        // Synchronize updates.
-        {indent_after(generate_updateds_synchronize(), 8)}
-
-        // Synchronize distances.
-        {indent_after(generate_distance_DtoH_synchronize(), 8)}
-
-        if (updated != 0) {{
-            {indent_after(generate_distance_HtoD_synchronize(), 12)}
+        // Copy GPU distances back to main memory.
+        for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
+            CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+            for (int block = gpu_blocks[cur_gpu];
+                    block < gpu_blocks[cur_gpu + 1]; block++
+            ) {{
+                int start = block_ranges[2 * block];
+                int end   = block_ranges[2 * block + 1];
+                CUDA_ERRCHK(cudaMemcpyAsync(
+                            dist + start, cu_dists[cur_gpu] + start,
+                            (end - start) * sizeof(weight_t),
+                            cudaMemcpyDeviceToHost));
+            }}
         }}
 
-        cudaDeviceSynchronize();
+        // Synchronize updates.
+        nid_t tmp_updated;
+        for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
+            CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+            CUDA_ERRCHK(cudaMemcpy(&tmp_updated, cu_updateds[cur_gpu], 
+                    sizeof(nid_t), cudaMemcpyDeviceToHost));
+            updated += tmp_updated;
+        }}
+        updated += cpu_updated;
+
+        // Only update GPU distances if another epoch will be run.
+        if (updated != 0) {{
+            // Copy CPU distances to all GPUs.
+            {indent_after(generate_distance_HtoD_synchronize(), 12)}
+
+            // Copy GPU distances peer-to-peer.
+            for (int src_gpu = 0; src_gpu < num_gpus; src_gpu++) {{
+                CUDA_ERRCHK(cudaSetDevice(src_gpu));
+                for (int dst_gpu = 0; dst_gpu < num_gpus; dst_gpu++) {{
+                    if (src_gpu == dst_gpu) continue;
+                    
+                    for (int block = gpu_blocks[src_gpu];
+                            block < gpu_blocks[src_gpu + 1]; block++
+                    ) {{
+                        int start = block_ranges[2 * block];
+                        int end   = block_ranges[2 * block + 1];
+                        CUDA_ERRCHK(cudaMemcpyAsync(
+                                    cu_dists[dst_gpu] + start,
+                                    cu_dists[src_gpu] + start,
+                                    (end - start) * sizeof(weight_t),
+                                    cudaMemcpyDeviceToDevice));
+                    }}
+                }}
+            }}
+        }}
     }}
     timer.Stop();
 
@@ -345,13 +343,17 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         (*ret_dist)[i] = dist[i];
 
     // Free memory.
-    for (int i = 0; i < num_blocks; i++) {{
-        CUDA_ERRCHK(cudaFree(cu_indices[i]));
-        CUDA_ERRCHK(cudaFree(cu_neighbors[i]));
-    }}
-    for (int i = 0; i < num_gpus; i++) {{
-        CUDA_ERRCHK(cudaFree(cu_updateds[i]));
-        CUDA_ERRCHK(cudaFree(cu_dists[i]));
+    for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
+        CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+        CUDA_ERRCHK(cudaFree(cu_updateds[cur_gpu]));
+        CUDA_ERRCHK(cudaFree(cu_dists[cur_gpu]));
+        
+        for (int block = gpu_blocks[cur_gpu]; block < gpu_blocks[cur_gpu + 1];
+                block++
+        ) {{
+            CUDA_ERRCHK(cudaFree(cu_indices[block]));
+            CUDA_ERRCHK(cudaFree(cu_neighbors[block]));
+        }}
     }}
     CUDA_ERRCHK(cudaFreeHost(dist));
     delete[] seg_ranges;
@@ -381,5 +383,6 @@ def indent_all(block: str, indent=4) -> str:
 def is_gpu(device_name: str) -> bool:
     return device_name in [
         'NVIDIA Quadro RTX 4000',
-        'NVIDIA Tesla V100'
+        'NVIDIA Tesla V100',
+        'NVIDIA Tesla M60'
     ]

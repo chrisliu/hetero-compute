@@ -16,7 +16,7 @@ def main():
     # Load profiles and query device counts.
     profiles = load_profiles(args.profiles)
     #hardware_config = query_devices(profiles)
-    hardware_config = {"Intel i7-9700K": 1, "NVIDIA Quadro RTX 4000": 1}
+    hardware_config = {'Intel Xeon E5-2686': 1, 'NVIDIA Tesla M60': 2}
     profiles = filter_profiles(profiles, hardware_config)
 
     # Schedule.
@@ -41,6 +41,18 @@ def main():
     scheduler.contiguify_schedule(schedule)
     write_schedule(schedule, 'out.skd')
 
+    #schedule = [scheduler.DeviceSchedule(devname) 
+                #for devname, count in hardware_config.items()
+                #for _ in range(count)]
+    #schedule[0].schedule.append(scheduler.KernelSegment('SSSP CPU one-to-one', 0, 0))
+    #schedule[0].schedule[0].seg_start = 0 
+    #schedule[0].schedule[0].seg_end = 0
+    #schedule[1].schedule.append(scheduler.KernelSegment('SSSP GPU warp-min 512 1024', 0, 0))
+    #schedule[1].schedule[0].seg_start = 1
+    #schedule[1].schedule[0].seg_end = 7
+    #schedule[2].schedule.append(scheduler.KernelSegment('SSSP GPU warp-min 512 1024', 0, 0))
+    #schedule[2].schedule[0].seg_start = 8
+    #schedule[2].schedule[0].seg_end = 15
     # Write out SSSP hetero file.
     with open('sssp_pull.cuh', 'w') as ofs:
         ofs.write(
