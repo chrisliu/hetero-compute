@@ -205,15 +205,15 @@ int main(int argc, char *argv[]) {
         /*delete[] ret_dist;*/
     /*}*/
 
-    // Run GPU warp min kernel.
-    {
-        std::cout << "SSSP GPU warp min:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_warp_min, init_dist, &ret_dist,
-                NUM_BLOCKS);
-        std::cout << res;
-        delete[] ret_dist;
-    }
+    /*// Run GPU warp min kernel.*/
+    /*{*/
+        /*std::cout << "SSSP GPU warp min:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_gpu(g,*/
+                /*epoch_sssp_pull_gpu_warp_min, init_dist, &ret_dist,*/
+                /*NUM_BLOCKS);*/
+        /*std::cout << res;*/
+        /*delete[] ret_dist;*/
+    /*}*/
 
     /*// Run GPU block min kernel.*/
     /*{*/

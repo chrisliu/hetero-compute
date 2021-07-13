@@ -98,6 +98,14 @@ def generate_sssp_hetero_source_code(scheds: List[DeviceSchedule]) -> str:
                        for kerseg in devsched.schedule) + 1
     num_gpus     = len(gpu_segments)
 
+    cpu_name = ""
+    gpu_name = ""
+    for sched in scheds:
+        if is_gpu(sched.device_name):
+            gpu_name = sched.device_name
+        else:
+            cpu_name = sched.device_name
+
     ###########################################################################
     ##    Helper Generator Functions                                         ##
     ###########################################################################
@@ -197,7 +205,9 @@ f"""
 /**
  * Runs SSSP kernel heterogeneously across the CPU and GPU. Synchronization 
  * occurs in serial. 
- * SSSP heterogeneous kernel for {num_gpus} GPU{'s' if num_gpus > 1 else ''}.
+ * Configuration:
+ *   - 1x {cpu_name}
+ *   - {num_gpus}x {gpu_name}
  *
  * Parameters:
  *   - g         <- graph.
