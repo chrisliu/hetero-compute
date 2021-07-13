@@ -277,7 +277,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         CUDA_ERRCHK(cudaEventSynchronize(mem_end));
         float transfer_time;
         CUDA_ERRCHK(cudaEventElapsedTime(&transfer_time, mem_start, mem_end));
-        std::cout << " > Memory transfer time: " << transfer_time << "ms"
+        std::cout << " > Memory transfer time: " << transfer_time << "ms" << std::endl;
         epoch++;
     }
     timer.Stop();
