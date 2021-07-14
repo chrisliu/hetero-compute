@@ -14,6 +14,9 @@ from scheduler.scheduler import (
     KernelSegment
 )
 
+# Generate timing related code.
+TIMING_ON = True
+
 ###############################################################################
 ##### Enums ###################################################################
 ###############################################################################
@@ -131,6 +134,13 @@ block_ranges[{2 * idx + 1}] = seg_ranges[{kerseg.seg_end + 1}]; // Block {idx} E
         code = ''
         for devid, devsched in enumerate(gpu_segments):
             code += f'CUDA_ERRCHK(cudaSetDevice({devid}));' + '\n'
+            if TIMING_ON:
+                code += \
+f"""
+#ifdef TIMING_ON
+CUDA_ERRCHK(cudaEventRecord(gpu_start[{devid}]));
+#endif // TIMING_ON
+""".strip() + '\n'
             for kerid, kerseg in enumerate(devsched):
                 idx    = gpu_prefix_sum[devid] + kerid
                 kernel = parse_kernel(kerseg.kernel_name)
@@ -141,6 +151,13 @@ f"""
         block_ranges[{2 * idx}], block_ranges[{2 * idx + 1}],
         cu_dists[{devid}], cu_updateds[{devid}]);
 """.strip() + '\n'
+            if TIMING_ON:
+                code += \
+f"""
+#ifdef TIMING_ON
+CUDA_ERRCHK(cudaEventRecord(gpu_stop[{devid}]));
+#endif // TIMING_ON
+""".strip() + '\n'
         return code.strip()
 
     def generate_cpu_kernel_launches() -> str:
@@ -148,6 +165,13 @@ f"""
         cpu_schedule = next(filter(lambda devsched: 
                                       not is_gpu(devsched.device_name),
                                    scheds))
+        if TIMING_ON:
+            code += \
+f"""
+#ifdef TIMING_ON
+cpu_timer.Start();
+#endif // TIMING_ON
+""".strip() + '\n'
         for kerseg in cpu_schedule.schedule:
             kernel = parse_kernel(kerseg.kernel_name)
             code += \
@@ -158,6 +182,13 @@ f"""
             seg_ranges[{kerseg.seg_start}], seg_ranges[{kerseg.seg_end + 1}],
             omp_get_thread_num(), omp_get_num_threads(), cpu_updated);
 }}
+""".strip() + '\n'
+        if TIMING_ON:
+            code += \
+f"""
+#ifdef TIMING_ON
+cpu_timer.Stop();
+#endif // TIMING_ON
 """.strip() + '\n'
         return code.strip()
 
@@ -178,6 +209,117 @@ for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
 }}
 """.strip() + '\n'
         return code.strip()
+
+    # Timing code.
+    def generate_timing_controller() -> str:
+        code = \
+"""
+// Toggle timing on/off.
+#define TIMING_ON
+"""
+        return code if TIMING_ON else ''
+
+    def generate_timing_init() -> str:
+        code = \
+"""
+// Intitialize timing related variables.
+#ifdef TIMING_ON
+Timer cpu_timer;
+cudaEvent_t gpu_start[num_gpus];
+cudaEvent_t gpu_stop[num_gpus];
+for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
+    CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+    CUDA_ERRCHK(cudaEventCreate(&gpu_start[cur_gpu]));
+    CUDA_ERRCHK(cudaEventCreate(&gpu_stop[cur_gpu]));
+}
+cudaEvent_t mem_start, mem_stop;
+CUDA_ERRCHK(cudaSetDevice(0));
+CUDA_ERRCHK(cudaEventCreate(&mem_start));
+CUDA_ERRCHK(cudaEventCreate(&mem_stop));
+
+int epoch = 0;
+#endif // TIMING_ON
+"""
+        return code if TIMING_ON else ''
+
+    def generate_mem_time_start() -> str:
+        code = \
+"""
+// Start memory transfer timing.
+#ifdef TIMING_ON
+CUDA_ERRCHK(cudaSetDevice(0));
+CUDA_ERRCHK(cudaEventRecord(mem_start));
+#endif // TIMING_ON
+"""
+        return code if TIMING_ON else ''
+
+    def generate_mem_time_stop() -> str:
+        code = \
+"""
+// Stop memory transfer timing.
+#ifdef TIMING_ON
+CUDA_ERRCHK(cudaSetDevice(0));
+CUDA_ERRCHK(cudaEventRecord(mem_stop));
+#endif // TIMING_ON
+"""
+        return code if TIMING_ON else ''
+
+    def generate_timing_print() -> str:
+        code = \
+"""
+
+// Stop memory transfer timing.
+CUDA_ERRCHK(cudaSetDevice(0));
+CUDA_ERRCHK(cudaEventRecord(mem_stop));
+
+// Display timing results.
+#ifdef TIMING_ON
+// Get times.
+float gpu_times[num_gpus];
+for (int i = 0; i < num_gpus; i++) {
+    CUDA_ERRCHK(cudaSetDevice(i));
+    CUDA_ERRCHK(cudaEventSynchronize(gpu_stop[i]));
+    CUDA_ERRCHK(cudaEventElapsedTime(&gpu_times[i], gpu_start[i], 
+            gpu_stop[i]))
+}
+CUDA_ERRCHK(cudaSetDevice(0));
+CUDA_ERRCHK(cudaEventSynchronize(mem_stop));
+float transfer_time;
+CUDA_ERRCHK(cudaEventElapsedTime(&transfer_time, mem_start, mem_stop));
+
+// Print results.
+std::cout << "Epoch " << epoch << " results" << std::endl
+          << " > CPU time: " << cpu_timer.Millisecs() << " ms" 
+              << std::endl;
+for (int i = 0; i < num_gpus; i++) {
+    std::cout
+          << " > GPU " << i << " time: " << gpu_times[i] << " ms" 
+          << std::endl;
+}
+std::cout << " > Memory transfer time: " << transfer_time << " ms" 
+    << std::endl;
+epoch++;
+#endif // TIMING_ON
+"""
+        return code if TIMING_ON else ''
+
+
+    def generate_timing_free() -> str:
+        code = \
+"""
+#ifdef TIMING_ON
+CUDA_ERRCHK(cudaSetDevice(0));
+CUDA_ERRCHK(cudaEventDestroy(mem_start));
+CUDA_ERRCHK(cudaEventDestroy(mem_stop));
+for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
+    CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+    CUDA_ERRCHK(cudaEventDestroy(gpu_start[cur_gpu]));
+    CUDA_ERRCHK(cudaEventDestroy(gpu_stop[cur_gpu]));
+}
+#endif // TIMING_ON
+"""
+
+        return code if TIMING_ON else ''
 
     ###########################################################################
     ##    Main Source Code Generation                                        ##
@@ -201,7 +343,7 @@ f"""
 #include "../../cuda.cuh"
 #include "../../graph.h"
 #include "../../util.h"
-
+{generate_timing_controller()}
 /**
  * Runs SSSP kernel heterogeneously across the CPU and GPU. Synchronization 
  * occurs in serial. 
@@ -274,7 +416,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         CUDA_ERRCHK(cudaMalloc((void **) &cu_updateds[cur_gpu], 
                 sizeof(nid_t)));
     }}
-
+    {indent_all(generate_timing_init())}
     // Start kernel!
     Timer timer; timer.Start();
     while (updated != 0) {{
@@ -291,7 +433,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         {indent_after(generate_gpu_kernel_launches(), 8)}
 
         // Launch CPU epoch kernels.
-        {indent_after(generate_cpu_kernel_launches(), 8)}
+{indent_all(generate_cpu_kernel_launches(), 8)}
 
         // Copy GPU distances back to main memory.
         for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
@@ -307,7 +449,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                             cudaMemcpyDeviceToHost));
             }}
         }}
-
+        {indent_all(generate_mem_time_start(), 8)}
         // Synchronize updates.
         nid_t tmp_updated;
         for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {{
@@ -342,7 +484,8 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                     }}
                 }}
             }}
-        }}
+        }}""" + indent_after(generate_timing_print(), 8) + \
+f"""
     }}
     timer.Stop();
 
@@ -367,7 +510,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
     }}
     CUDA_ERRCHK(cudaFreeHost(dist));
     delete[] seg_ranges;
-
+    {indent_all(generate_timing_free())}
     return timer.Millisecs();
 }}
 
@@ -382,13 +525,20 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
 
 def indent_after(block: str, indent=4) -> str:
     """Indent all lines except for the first one with {indent} number of 
-    spaces."""
+    spaces. Ignores #if #endif preprocessor statements."""
     lines = block.split('\n')
-    return '\n'.join([lines[0]] + [' ' * indent + line for line in lines[1:]])
+    indstr = ' ' * indent
+    return '\n'.join([lines[0]] + [('' if is_ifendif(line) else indstr) + line 
+                                   for line in lines[1:]])
 
 def indent_all(block: str, indent=4) -> str:
-    """Indent all lines with {indent} number of spaces."""
-    return ' ' * indent + indent_after(block, indent)
+    """Indent all lines with {indent} number of spaces. Ignores #if #endif 
+    preprocessor statements."""
+    return ('' if is_ifendif(block) else ' ' * indent) \
+        + indent_after(block, indent)
+
+def is_ifendif(line: str) -> bool:
+    return line[:3] == '#if' or line[:6] == '#endif'
 
 def is_gpu(device_name: str) -> bool:
     return device_name in [

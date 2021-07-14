@@ -301,6 +301,13 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
             CUDA_ERRCHK(cudaFree(cu_neighbors[block]));
         }
     }
+    CUDA_ERRCHK(cudaEventDestroy(mem_start));
+    CUDA_ERRCHK(cudaEventDestroy(mem_end));
+    for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
+        CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+        CUDA_ERRCHK(cudaEventDestroy(gpu_start[cur_gpu]));
+        CUDA_ERRCHK(cudaEventDestroy(gpu_end[cur_gpu]));
+    }
     CUDA_ERRCHK(cudaFreeHost(dist));
     delete[] seg_ranges;
 
