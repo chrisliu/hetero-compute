@@ -126,7 +126,7 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
     CUDA_ERRCHK(cudaEventCreate(&stop_t));
 
     // Run benchmark for this segment!
-    for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
+    for (int iter = 0; iter < BENCHMARK_SEGMENT_TIME_ITERS; iter++) {
         // Setup kernel.
         CUDA_ERRCHK(cudaMemcpy(cu_dist, init_dist, 
                 g->num_nodes * sizeof(weight_t), cudaMemcpyHostToDevice));
@@ -149,7 +149,7 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
     CUDA_ERRCHK(cudaEventDestroy(stop_t));
 
     // Save results.
-    result.millisecs = total_time / BENCHMARK_TIME_ITERS;
+    result.millisecs = total_time / BENCHMARK_SEGMENT_TIME_ITERS;
     result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
     // TODO: divided by 2 is a conservative estimate.
 
@@ -163,7 +163,7 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
 segment_res_t benchmark_sssp_gpu(
         const CSRWGraph &g, 
         sssp_gpu_epoch_func epoch_kernel,
-        const weight_t *init_dist, weight_t **ret_dist,
+        SourcePicker &sp,
         int block_size, int thread_count
 ) {
     // Initialize results and calculate segment properties.
@@ -173,18 +173,29 @@ segment_res_t benchmark_sssp_gpu(
     result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
     result.num_edges  = g.num_edges;
 
-    // Run kernel!
-    double total_time = 0.0;
-    for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
-        total_time += sssp_pull_gpu(g, epoch_kernel, init_dist, ret_dist,
-                block_size, thread_count);
+    // Define initial and return distances.
+    weight_t *init_dist = new weight_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        init_dist[i] = INF_WEIGHT;
+    weight_t *ret_dist = nullptr;
 
-        if (iter != BENCHMARK_TIME_ITERS - 1)
-            delete[] (*ret_dist);
+    // Run kernel!
+    nid_t previous_source = 0;
+    double total_time = 0.0;
+    for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
+        nid_t cur_source = sp.next_vertex();
+        init_dist[previous_source] = INF_WEIGHT;
+        init_dist[cur_source]      = 0;
+        previous_source = cur_source;
+
+        total_time += sssp_pull_gpu(g, epoch_kernel, init_dist, &ret_dist,
+                block_size, thread_count);
+        delete[] ret_dist;
     }
 
     // Save results.
-    result.millisecs = total_time / BENCHMARK_TIME_ITERS;
+    result.millisecs = total_time / BENCHMARK_FULL_TIME_ITERS;
     result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
     // TODO: divided by 2 is a conservative estimate.
 

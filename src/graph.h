@@ -15,6 +15,7 @@
 #include <fstream>
 #include <istream>
 #include <limits>
+#include <random>
 
 /** Type info. */
 using nid_t    = std::int32_t;     // Node ID type.
@@ -65,11 +66,51 @@ public:
     Neighborhood get_neighbors(nid_t nid) const {
         return Neighborhood(nid, index, neighbors);
     }
+
+    bool has_self_cycle(nid_t nid) const {
+        for (const auto &nei : get_neighbors(nid))
+            if (nei.v == nid) return true;
+        return false;
+    }
 };
 
 /*****************************************************************************
  ***** Helper Functions ******************************************************
  *****************************************************************************/
+
+class SourcePicker {
+public:
+    // TODO: randomly generate seed.
+    SourcePicker(const CSRWGraph * const g_, nid_t const_source_ = -1) 
+        : g(g_), udist(0, g->num_nodes - 1), const_source(const_source_)
+    {
+        rng = std::mt19937(rand_seed);
+    }
+
+    nid_t next_vertex() {
+        if (const_source >= 0) return const_source;
+
+        nid_t source;
+        do {
+            source = udist(rng);
+        } while (g->get_degree(source) == 0 or 
+                (g->get_degree(source) == 1 and g->has_self_cycle(source)));
+        return source;
+    }
+
+    void reset() {
+        rng = std::mt19937(rand_seed);
+    }
+
+private:
+    const CSRWGraph * const              g;
+    nid_t                                const_source; // Always pick same 
+                                                       // vertex.
+    std::mt19937                         rng;
+    std::uniform_int_distribution<nid_t> udist;
+
+    const int rand_seed = 37525;
+};
 
 /**
  * Computes the starting and ending node IDs for each segments such that

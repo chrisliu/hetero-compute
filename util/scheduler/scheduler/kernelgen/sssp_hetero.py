@@ -268,12 +268,11 @@ CUDA_ERRCHK(cudaEventRecord(mem_stop));
         code = \
 """
 
+#ifdef TIMING_ON
 // Stop memory transfer timing.
 CUDA_ERRCHK(cudaSetDevice(0));
 CUDA_ERRCHK(cudaEventRecord(mem_stop));
 
-// Display timing results.
-#ifdef TIMING_ON
 // Get times.
 float gpu_times[num_gpus];
 for (int i = 0; i < num_gpus; i++) {

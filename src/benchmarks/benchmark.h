@@ -7,8 +7,10 @@
 
 // Number of warmup rounds.
 #define BENCHMARK_WARMUP_ITERS 5
-// Number of rounds to average.
-#define BENCHMARK_TIME_ITERS 5
+// Number of rounds to average for segments.
+#define BENCHMARK_SEGMENT_TIME_ITERS 5
+// Number of rounds to average for full kernel runs.
+#define BENCHMARK_FULL_TIME_ITERS 64
 // Output precision.
 #define BENCHMARK_PRECISION 10
 

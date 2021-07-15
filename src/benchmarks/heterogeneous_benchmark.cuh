@@ -18,7 +18,7 @@
  *   Execution results.
  */
 segment_res_t benchmark_sssp_heterogeneous(const CSRWGraph &g,
-        const weight_t *init_dist, weight_t ** const ret_dist
+        SourcePicker sp
 ) {
     // Initialize results and calculate segment properties.
     segment_res_t result;
@@ -27,17 +27,29 @@ segment_res_t benchmark_sssp_heterogeneous(const CSRWGraph &g,
     result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
     result.num_edges  = g.num_edges;
 
-    // Run kernel!
-    double total_time = 0.0;
-    for (int iter = 0; iter < BENCHMARK_TIME_ITERS; iter++) {
-        total_time += sssp_pull_heterogeneous(g, init_dist, ret_dist);
+    // Define initial and return distances.
+    weight_t *init_dist = new weight_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        init_dist[i] = INF_WEIGHT;
+    weight_t *ret_dist = nullptr;
 
-        if (iter != BENCHMARK_TIME_ITERS - 1)
-            delete[] (*ret_dist);
+    // Run kernel!
+    nid_t previous_source = 0;
+    double total_time = 0.0;
+    for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
+        nid_t cur_source = sp.next_vertex();
+        init_dist[previous_source] = INF_WEIGHT;
+        init_dist[cur_source]      = 0;
+        previous_source = cur_source;
+
+        total_time += sssp_pull_heterogeneous(g, init_dist, &ret_dist);
+
+        delete[] ret_dist;
     }
 
     // Save results.
-    result.millisecs = total_time / BENCHMARK_TIME_ITERS;
+    result.millisecs = total_time / BENCHMARK_FULL_TIME_ITERS;
     result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
     // TODO: divided by 2 is a conservative estimate.
 
