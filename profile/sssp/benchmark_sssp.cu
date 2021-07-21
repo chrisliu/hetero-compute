@@ -181,40 +181,40 @@ int main(int argc, char *argv[]) {
 #ifdef RUN_FULL_KERNELS
     SourcePicker sp(&g);
     /*// Run CPU kernel.*/
-    sp.reset();
-    {
-        std::cout << "SSSP CPU:" << std::endl;
-        segment_res_t res = benchmark_sssp_cpu(g,
-                epoch_sssp_pull_cpu_one_to_one, sp);
-        std::cout << res;
-    }
+    /*sp.reset();*/
+    /*{*/
+        /*std::cout << "SSSP CPU:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_cpu(g,*/
+                /*epoch_sssp_pull_cpu_one_to_one, sp);*/
+        /*std::cout << res;*/
+    /*}*/
 
-    /*// Run GPU naive kernel.*/
-    sp.reset();
-    {
-        std::cout << "SSSP GPU naive:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);
-        std::cout << res;
-    }
+    /*[>// Run GPU naive kernel.<]*/
+    /*sp.reset();*/
+    /*{*/
+        /*std::cout << "SSSP GPU naive:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_gpu(g,*/
+                /*epoch_sssp_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);*/
+        /*std::cout << res;*/
+    /*}*/
 
-    /*// Run GPU warp min kernel.*/
-    sp.reset();
-    {
-        std::cout << "SSSP GPU warp min:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_warp_min, sp, NUM_BLOCKS, 1024);
-        std::cout << res;
-    }
+    /*[>// Run GPU warp min kernel.<]*/
+    /*sp.reset();*/
+    /*{*/
+        /*std::cout << "SSSP GPU warp min:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_gpu(g,*/
+                /*epoch_sssp_pull_gpu_warp_min, sp, NUM_BLOCKS, 1024);*/
+        /*std::cout << res;*/
+    /*}*/
 
-    /*// Run GPU block min kernel.*/
-    sp.reset();
-    {
-        std::cout << "SSSP GPU block min:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_block_min, sp, NUM_BLOCKS, 1024);
-        std::cout << res;
-    }
+    /*[>// Run GPU block min kernel.<]*/
+    /*sp.reset();*/
+    /*{*/
+        /*std::cout << "SSSP GPU block min:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_gpu(g,*/
+                /*epoch_sssp_pull_gpu_block_min, sp, NUM_BLOCKS, 1024);*/
+        /*std::cout << res;*/
+    /*}*/
 
     // Run heterogeneous kernel.
     sp.reset();

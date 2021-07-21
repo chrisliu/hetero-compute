@@ -23,9 +23,9 @@ void epoch_sssp_pull_gpu_one_to_one(
         const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
 );
 
-/******************************************************************************
- ***** SSSP Kernel ************************************************************
- ******************************************************************************/
+/*****************************************************************************
+ ***** SSSP Kernel ***********************************************************
+ *****************************************************************************/
 
 /**
  * Runs SSSP kernel on GPU. Synchronization occurs in serial.
@@ -102,6 +102,21 @@ double sssp_pull_gpu(
 /******************************************************************************
  ***** Epoch Kernels **********************************************************
  ******************************************************************************/
+
+/**
+ * Runs SSSP push on GPU for the first epoch.
+ *
+ * Parameters:
+ *   - neighbors     <- neighbors list to process.
+ *   - num_neighbors <- number of neighbors.
+ *   - dist          <- distance array.
+ */
+__global__
+void epoch_sssp_push_gpu(
+        const wnode_t *neighbors, const nid_t num_neighbors, weight_t *dist
+) {
+
+}
 
 /**
  * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
@@ -280,9 +295,9 @@ void epoch_sssp_pull_gpu_block_min(
         atomicAdd(updated, local_updated);
 }
 
-/******************************************************************************
- ***** Helper Functions *******************************************************
- ******************************************************************************/
+/*****************************************************************************
+ ***** Helper Functions ******************************************************
+ *****************************************************************************/
 
 /** Identifier for epoch kernels. */
 enum class SSSPGPU {

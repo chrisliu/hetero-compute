@@ -16,8 +16,7 @@
 #include "../../graph.h"
 #include "../../util.h"
 
-// Toggle timing on/off.
-/*#define TIMING_ON*/
+constexpr int num_gpus = 1;
 
 /**
  * Runs SSSP kernel heterogeneously across the CPU and GPU. Synchronization 
@@ -37,7 +36,6 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         const weight_t *init_dist, weight_t ** const ret_dist
 ) {
     // Configuration.
-    constexpr int num_gpus     = 1;
     constexpr int num_blocks   = 5;
     constexpr int num_segments = 16;
     
@@ -100,27 +98,15 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         CUDA_ERRCHK(cudaMalloc((void **) &cu_updateds[cur_gpu], 
                 sizeof(nid_t)));
     }
-        
-    // Intitialize timing related variables.
-#ifdef TIMING_ON
-    Timer cpu_timer;
-    cudaEvent_t gpu_start[num_gpus];
-    cudaEvent_t gpu_stop[num_gpus];
-    for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
-        CUDA_ERRCHK(cudaSetDevice(cur_gpu));
-        CUDA_ERRCHK(cudaEventCreate(&gpu_start[cur_gpu]));
-        CUDA_ERRCHK(cudaEventCreate(&gpu_stop[cur_gpu]));
-    }
-    cudaEvent_t mem_start, mem_stop;
-    CUDA_ERRCHK(cudaSetDevice(0));
-    CUDA_ERRCHK(cudaEventCreate(&mem_start));
-    CUDA_ERRCHK(cudaEventCreate(&mem_stop));
-    
-    int epoch = 0;
-#endif // TIMING_ON
-    
+
+    // Create streams.
+    cudaStream_t streams[num_blocks];
+    for (int b = 0; b < num_blocks; b++)
+        CUDA_ERRCHK(cudaStreamCreate(&streams[b]));
+
     // Start kernel!
     Timer timer; timer.Start();
+    int epochs = 0;
     while (updated != 0) {
         // Reset update counters.
         updated = cpu_updated = 0;          
@@ -133,47 +119,64 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         // Launch GPU epoch kernels.
         // Implicit CUDA device synchronize at the start of kernels.
         CUDA_ERRCHK(cudaSetDevice(0));
-#ifdef TIMING_ON
-        CUDA_ERRCHK(cudaEventRecord(gpu_start[0]));
-#endif // TIMING_ON
-        epoch_sssp_pull_gpu_block_min<<<64, 1024>>>(
+        epoch_sssp_pull_gpu_block_min<<<64, 1024, 0, streams[0]>>>(
                 cu_indices[0], cu_neighbors[0],
                 block_ranges[0], block_ranges[1],
                 cu_dists[0], cu_updateds[0]);
-        epoch_sssp_pull_gpu_block_min<<<512, 128>>>(
+        CUDA_ERRCHK(cudaMemcpyAsync(
+            dist + block_ranges[0], cu_dists[0] + block_ranges[0],
+            (block_ranges[1] - block_ranges[0]) * sizeof(weight_t),
+            cudaMemcpyDeviceToHost, streams[0]));
+        
+        epoch_sssp_pull_gpu_block_min<<<512, 128, 0, streams[1]>>>(
                 cu_indices[1], cu_neighbors[1],
                 block_ranges[2], block_ranges[3],
                 cu_dists[0], cu_updateds[0]);
-        epoch_sssp_pull_gpu_warp_min<<<64, 1024>>>(
+        CUDA_ERRCHK(cudaMemcpyAsync(
+            dist + block_ranges[2], cu_dists[0] + block_ranges[2],
+            (block_ranges[3] - block_ranges[2]) * sizeof(weight_t),
+            cudaMemcpyDeviceToHost, streams[1]));
+        
+        epoch_sssp_pull_gpu_warp_min<<<64, 1024, 0, streams[2]>>>(
                 cu_indices[2], cu_neighbors[2],
                 block_ranges[4], block_ranges[5],
                 cu_dists[0], cu_updateds[0]);
-        epoch_sssp_pull_gpu_warp_min<<<64, 1024>>>(
+        CUDA_ERRCHK(cudaMemcpyAsync(
+            dist + block_ranges[4], cu_dists[0] + block_ranges[4],
+            (block_ranges[5] - block_ranges[4]) * sizeof(weight_t),
+            cudaMemcpyDeviceToHost, streams[2]));
+        
+        epoch_sssp_pull_gpu_warp_min<<<64, 1024, 0, streams[3]>>>(
                 cu_indices[3], cu_neighbors[3],
                 block_ranges[6], block_ranges[7],
                 cu_dists[0], cu_updateds[0]);
-        epoch_sssp_pull_gpu_one_to_one<<<64, 1024>>>(
+        CUDA_ERRCHK(cudaMemcpyAsync(
+            dist + block_ranges[6], cu_dists[0] + block_ranges[6],
+            (block_ranges[7] - block_ranges[6]) * sizeof(weight_t),
+            cudaMemcpyDeviceToHost, streams[3]));
+        
+        epoch_sssp_pull_gpu_one_to_one<<<64, 1024, 0, streams[4]>>>(
                 cu_indices[4], cu_neighbors[4],
                 block_ranges[8], block_ranges[9],
                 cu_dists[0], cu_updateds[0]);
-#ifdef TIMING_ON
-        CUDA_ERRCHK(cudaEventRecord(gpu_stop[0]));
-#endif // TIMING_ON
+        CUDA_ERRCHK(cudaMemcpyAsync(
+            dist + block_ranges[8], cu_dists[0] + block_ranges[8],
+            (block_ranges[9] - block_ranges[8]) * sizeof(weight_t),
+            cudaMemcpyDeviceToHost, streams[4]));
 
         // Launch CPU epoch kernels.
-#ifdef TIMING_ON
-        cpu_timer.Start();
-#endif // TIMING_ON
-        #pragma omp parallel
+                #pragma omp parallel
         {
             epoch_sssp_pull_cpu_one_to_one(g, dist, 
                     seg_ranges[11], seg_ranges[13],
                     omp_get_thread_num(), omp_get_num_threads(), cpu_updated);
         }
-#ifdef TIMING_ON
-        cpu_timer.Stop();
-#endif // TIMING_ON
 
+        // Sync streams.
+        for (int i = 0; i < num_blocks; i++)
+            CUDA_ERRCHK(cudaStreamSynchronize(streams[i]));
+
+/*
         // Copy GPU distances back to main memory.
         for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
             CUDA_ERRCHK(cudaSetDevice(cur_gpu));
@@ -188,22 +191,23 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                             cudaMemcpyDeviceToHost));
             }
         }
-                
-        // Start memory transfer timing.
-#ifdef TIMING_ON
-        CUDA_ERRCHK(cudaSetDevice(0));
-        CUDA_ERRCHK(cudaEventRecord(mem_start));
-#endif // TIMING_ON
-        
+        */
+
         // Synchronize updates.
-        nid_t tmp_updated;
+        nid_t gpu_updateds[num_gpus];
         for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
             CUDA_ERRCHK(cudaSetDevice(cur_gpu));
-            CUDA_ERRCHK(cudaMemcpy(&tmp_updated, cu_updateds[cur_gpu], 
+            CUDA_ERRCHK(cudaMemcpyAsync(
+                    &gpu_updateds[cur_gpu], cu_updateds[cur_gpu], 
                     sizeof(nid_t), cudaMemcpyDeviceToHost));
-            updated += tmp_updated;
         }
         updated += cpu_updated;
+
+        for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
+            CUDA_ERRCHK(cudaSetDevice(cur_gpu));
+            CUDA_ERRCHK(cudaDeviceSynchronize());
+            updated += gpu_updateds[cur_gpu];
+        }
 
         // Only update GPU distances if another epoch will be run.
         if (updated != 0) {
@@ -236,47 +240,20 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                 }
             }
         }
-        
-#ifdef TIMING_ON
-        // Stop memory transfer timing.
-        CUDA_ERRCHK(cudaSetDevice(0));
-        CUDA_ERRCHK(cudaEventRecord(mem_stop));
-        
-        // Get times.
-        float gpu_times[num_gpus];
-        for (int i = 0; i < num_gpus; i++) {
-            CUDA_ERRCHK(cudaSetDevice(i));
-            CUDA_ERRCHK(cudaEventSynchronize(gpu_stop[i]));
-            CUDA_ERRCHK(cudaEventElapsedTime(&gpu_times[i], gpu_start[i], 
-                    gpu_stop[i]))
-        }
-        CUDA_ERRCHK(cudaSetDevice(0));
-        CUDA_ERRCHK(cudaEventSynchronize(mem_stop));
-        float transfer_time;
-        CUDA_ERRCHK(cudaEventElapsedTime(&transfer_time, mem_start, mem_stop));
-        
-        // Print results.
-        std::cout << "Epoch " << epoch << " results" << std::endl
-                  << " > CPU time: " << cpu_timer.Millisecs() << " ms" 
-                      << std::endl;
-        for (int i = 0; i < num_gpus; i++) {
-            std::cout
-                  << " > GPU " << i << " time: " << gpu_times[i] << " ms" 
-                  << std::endl;
-        }
-        std::cout << " > Memory transfer time: " << transfer_time << " ms" 
-            << std::endl;
-        epoch++;
-#endif // TIMING_ON
-        
+        epochs++;
     }
     timer.Stop();
+    std::cout << "Epochs: " << epochs << std::endl;
 
     // Copy output.
     *ret_dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
         (*ret_dist)[i] = dist[i];
+
+    // Free streams.
+    for (int b = 0; b < num_blocks; b++)
+        CUDA_ERRCHK(cudaStreamDestroy(streams[b]));
 
     // Free memory.
     for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
@@ -293,19 +270,26 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
     }
     CUDA_ERRCHK(cudaFreeHost(dist));
     delete[] seg_ranges;
-        
-#ifdef TIMING_ON
-    CUDA_ERRCHK(cudaSetDevice(0));
-    CUDA_ERRCHK(cudaEventDestroy(mem_start));
-    CUDA_ERRCHK(cudaEventDestroy(mem_stop));
-    for (int cur_gpu = 0; cur_gpu < num_gpus; cur_gpu++) {
-        CUDA_ERRCHK(cudaSetDevice(cur_gpu));
-        CUDA_ERRCHK(cudaEventDestroy(gpu_start[cur_gpu]));
-        CUDA_ERRCHK(cudaEventDestroy(gpu_stop[cur_gpu]));
-    }
-#endif // TIMING_ON
-    
+
     return timer.Millisecs();
+}
+
+/**
+ * Enable peer access between all compatible GPUs.
+ */
+void enable_all_peer_access() {
+    int can_access_peer;
+    for (int from = 0; from < num_gpus; from++) {
+        CUDA_ERRCHK(cudaSetDevice(from));
+
+        for (int to = 0; to < num_gpus; to++) {
+            if (from == to) continue;
+
+            CUDA_ERRCHK(cudaDeviceCanAccessPeer(&can_access_peer, from, to));
+            if(can_access_peer)
+                CUDA_ERRCHK(cudaDeviceEnablePeerAccess(to, 0));
+        }
+    }
 }
 
 #endif // SRC_KERNELS_HETEROGENEOUS__SSSP_PULL_CUH
