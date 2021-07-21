@@ -23,8 +23,8 @@ int main(int argc, char *argv[]) {
     CSRWGraph g = load_graph_from_file(argv[1]);
     std::cout << "Loaded graph." << std::endl;
 
-    const nid_t source_id = 0; // Arbitrarily set the highest degree node as
-                               // the source node.
+    SourcePicker sp(&g);
+    nid_t source_id = sp.next_vertex();
 
     // Compute oracle distance.
     weight_t *oracle_dist = nullptr;
