@@ -446,6 +446,8 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
     // Push for the first iteration.
     // TODO: implement push for more than one epoch. Requires parallel queue.
     for (wnode_t nei : g.get_neighbors(start)) {{
+        if (nei.v == start) continue;
+
         dist[nei.v] = nei.w;       
         for (int gpu = 0; gpu < num_gpus; gpu++) {{
             CUDA_ERRCHK(cudaSetDevice(gpu));
