@@ -18,6 +18,9 @@
 
 constexpr int num_gpus = 1;
 
+/** Forward decl. */
+void gpu_butterfly_P2P(nid_t *seg_ranges);
+
 /**
  * Runs SSSP kernel heterogeneously across the CPU and GPU. Synchronization 
  * occurs in serial. 
@@ -185,7 +188,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
             
 
             // Copy GPU distances peer-to-peer.
-            
+            gpu_butterfly_P2P(seg_ranges); // Not implmented if INTERLEAVE=true.
         }
         epochs++;
     }
@@ -248,6 +251,13 @@ void enable_all_peer_access() {
                 CUDA_ERRCHK(cudaDeviceEnablePeerAccess(to, 0));
         }
     }
+}
+
+/**
+ * Butterfly GPU P2P transfer.
+ */
+void gpu_butterfly_P2P(nid_t *seg_ranges) {
+    
 }
 
 #endif // SRC_KERNELS_HETEROGENEOUS__SSSP_PULL_CUH

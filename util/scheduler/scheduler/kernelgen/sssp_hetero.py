@@ -8,6 +8,7 @@
 
 import enum
 from functools import reduce
+from math import log
 from typing import *
 from scheduler.scheduler import (
     DeviceSchedule, 
@@ -15,7 +16,7 @@ from scheduler.scheduler import (
 )
 
 # Interleave computation and memory transfers.
-INTERLEAVE = True
+INTERLEAVE = False
 # GPUs work on highest degree nodes first.
 HIGH_DEGREE_FIRST = True
 
@@ -235,29 +236,76 @@ for (int gpu = 0; gpu < num_gpus; gpu++) {{
 """.strip() + '\n'
         return code.strip()
 
-    def generate_distance_DtoD_synchronize() -> str:
+    def generate_butterfly_transfer() -> str:
+        """Performs a butterfly pattern."""
         if num_gpus <= 1 or INTERLEAVE: return ''
-        code = \
-"""
-for (int src_gpu = 0; src_gpu < num_gpus; src_gpu++) {
-    CUDA_ERRCHK(cudaSetDevice(src_gpu));
-    for (int dst_gpu = 0; dst_gpu < num_gpus; dst_gpu++) {
-        if (src_gpu == dst_gpu) continue;
 
-        for (int block = gpu_blocks[src_gpu];
-                block < gpu_blocks[src_gpu + 1]; block++
-        ) {
-            int start = block_ranges[2 * block];
-            int end   = block_ranges[2 * block + 1];
-            CUDA_ERRCHK(cudaMemcpyAsync(
-                        cu_dists[dst_gpu] + start,
-                        cu_dists[src_gpu] + start,
-                        (end - start) * sizeof(weight_t),
-                        cudaMemcpyDeviceToDevice));
-        }
-    }
-}
-""".strip()
+        # Only for base 2 for now.
+        assert(log(num_gpus, 2).is_integer()) 
+
+        chunks = gpu_contig_mem
+
+        def merge(segs1, segs2):
+            merged = list()
+            idx1 = 0
+            idx2 = 0
+            while idx1 < len(segs1) and idx2 < len(segs2):
+                s1, e1 = segs1[idx1]
+                s2, e2 = segs2[idx2]
+                if s1 < s2:
+                    merged.append([s1, e1])
+                    idx1 += 1
+                else:
+                    merged.append([s2, e2])
+                    idx2 += 1
+            while idx1 < len(segs1):
+                s, e = segs1[idx1]
+                merged.append([s, e])
+                idx1 += 1
+            while idx2 < len(segs2):
+                s, e = segs2[idx2]
+                merged.append([s, e])
+                idx2 += 1
+            return merged
+
+        def contiguify(segs):
+            idx = 1
+            while idx < len(segs):
+                if segs[idx - 1][1] + 1 == segs[idx][0]:
+                    segs[idx - 1][1] = segs[idx][1]
+                    del segs[idx]
+                else:
+                    idx += 1
+            return segs
+
+        code = ''
+        for i in range(int(log(num_gpus, 2))):
+            # Determine new blocks.
+            if i != 0:
+                chunks = [contiguify(merge(l, r))
+                          for l, r in zip(chunks[::2], chunks[1::2])]
+            if i != 0: code += '\n'
+            code += f'// Butterfly Iteration {i}' + '\n'
+
+            prefix = 0
+            block = 2 ** i
+            for chunk_id, chunk in enumerate(chunks):
+                stride = (1 if chunk_id % 2 == 0 else -1) * 2 ** i
+                for gpu in range(block):
+                    from_gpu = prefix + gpu
+                    to_gpu = (from_gpu + stride) % num_gpus
+
+                    for seg in chunk:
+                        start, end = seg
+                        code += \
+    f"""
+    CUDA_ERRCHK(cudaMemcpyAsync(
+        cu_dist[{to_gpu}] + seg_ranges[{start}], cu_dist[{from_gpu}] + seg_ranges[{start}],
+        (seg_ranges[{end + 1}] - seg_ranges[{start}]) * sizeof(weight_t), cudaMemcpyHostToDevice));
+    """.strip() + '\n'
+                
+                prefix += block
+
         return code
 
     def generate_distance_DtoH_synchronize() -> str:
@@ -302,6 +350,9 @@ f"""
 #include "../../util.h"
 
 constexpr int num_gpus = {num_gpus};
+
+/** Forward decl. */
+void gpu_butterfly_P2P(nid_t *seg_ranges);
 
 /**
  * Runs SSSP kernel heterogeneously across the CPU and GPU. Synchronization 
@@ -447,7 +498,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
             {indent_after(generate_distance_HtoD_synchronize(), 12)}
 
             // Copy GPU distances peer-to-peer.
-            {indent_after(generate_distance_DtoD_synchronize(), 12)}
+            gpu_butterfly_P2P(seg_ranges); // Not implmented if INTERLEAVE=true.
         }}
         epochs++;
     }}
@@ -505,6 +556,13 @@ void enable_all_peer_access() {{
                 CUDA_ERRCHK(cudaDeviceEnablePeerAccess(to, 0));
         }}
     }}
+}}
+
+/**
+ * Butterfly GPU P2P transfer.
+ */
+void gpu_butterfly_P2P(nid_t *seg_ranges) {{
+    {indent_after(generate_butterfly_transfer())}
 }}
 
 #endif // SRC_KERNELS_HETEROGENEOUS__SSSP_PULL_CUH
