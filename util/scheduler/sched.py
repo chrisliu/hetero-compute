@@ -17,7 +17,10 @@ def main():
     profiles = load_profiles(args.profiles)
     #hardware_config = query_devices(profiles)
     #hardware_config = {'Intel Xeon E5-2686': 1, 'NVIDIA Tesla M60': 2}
-    hardware_config = {'Intel i7-9700K': 1, 'NVIDIA Quadro RTX 4000': 1}
+    #hardware_config = {'Intel i7-9700K': 1, 'NVIDIA Quadro RTX 4000': 2}
+    #hardware_config = {'Intel i7-9700K': 1, 'NVIDIA Quadro RTX 4000': 1}
+    #hardware_config = {'NVIDIA Quadro RTX 4000': 2}
+    hardware_config = {'NVIDIA Quadro RTX 4000': 1}
     profiles = filter_profiles(profiles, hardware_config)
 
     # Schedule.

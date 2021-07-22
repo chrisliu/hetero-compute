@@ -16,6 +16,8 @@ from scheduler.scheduler import (
 
 # Interleave computation and memory transfers.
 INTERLEAVE = True
+# GPUs work on highest degree nodes first.
+HIGH_DEGREE_FIRST = True
 
 ###############################################################################
 ##### Enums ###################################################################
@@ -94,12 +96,25 @@ def generate_sssp_hetero_source_code(scheds: List[DeviceSchedule]) -> str:
     gpu_prefix_sum = reduce(lambda acc, devsched: 
                                 acc + [acc[-1] + len(devsched)],
                             gpu_segments[:-1], [0])
+    gpu_contig_mem: List[List[List[int, int]]] = list()
+    for segs in gpu_segments:
+        contig_mem = [[seg.seg_start, seg.seg_end] for seg in segs]
+        idx = 1
+        while idx < len(contig_mem):
+            # Merge if necessary.
+            if contig_mem[idx - 1][1]  + 1 == contig_mem[idx][0]:
+                contig_mem[idx - 1][1] = contig_mem[idx][1]
+                del contig_mem[idx]
+            else:
+                idx += 1
+        gpu_contig_mem.append(contig_mem)
 
     num_blocks   = sum(len(sched) for sched in gpu_segments)
     num_segments = max(kerseg.seg_end 
                        for devsched in scheds
                        for kerseg in devsched.schedule) + 1
     num_gpus     = len(gpu_segments)
+    has_cpu      = len(scheds) != num_gpus
 
     cpu_name = ""
     gpu_name = ""
@@ -133,28 +148,57 @@ block_ranges[{2 * idx + 1}] = seg_ranges[{kerseg.seg_end + 1}]; // Block {idx} E
     def generate_gpu_kernel_launches() -> str:
         code = ''
         for devid, devsched in enumerate(gpu_segments):
+            if devid != 0: code += '\n'
             code += f'CUDA_ERRCHK(cudaSetDevice({devid}));' + '\n'
             kernel_launches = list()
             for kerid, kerseg in enumerate(devsched):
                 idx    = gpu_prefix_sum[devid] + kerid
                 kernel = parse_kernel(kerseg.kernel_name)
+
+                # Launch kernel.
                 segcode = \
 f"""
 {to_epochkernel_funcname(kernel.kerid)}<<<{kernel.block_count}, {kernel.thread_count}, 0, streams[{idx}]>>>(
         cu_indices[{idx}], cu_neighbors[{idx}],
         block_ranges[{2 * idx}], block_ranges[{2 * idx + 1}],
         cu_dists[{devid}], cu_updateds[{devid}]);
+""".strip()
+
+                # Device to Host memcpy if needed.
+                if has_cpu:
+                    segcode += '\n' + \
+f"""
 CUDA_ERRCHK(cudaMemcpyAsync(
     dist + block_ranges[{2 * idx}], cu_dists[{devid}] + block_ranges[{2 * idx}],
     (block_ranges[{2 * idx + 1}] - block_ranges[{2 * idx}]) * sizeof(weight_t),
     cudaMemcpyDeviceToHost, streams[{idx}]));
-""".strip() + '\n'
+""".strip()
+
+                # Peer to Peer memcpy if needed.
+                if INTERLEAVE and num_gpus > 1:
+                    segcode += '\n' + \
+f"""
+for (int gpu = 0; gpu < num_gpus; gpu++) {{
+    if (gpu == {devid}) continue;
+
+    CUDA_ERRCHK(cudaMemcpyAsync(
+        cu_dists[gpu] + block_ranges[{2 * idx}], cu_dists[{devid}] + block_ranges[{2  * idx}],
+    (block_ranges[{2 * idx + 1}] - block_ranges[{2 * idx}]) * sizeof(weight_t),
+    cudaMemcpyDeviceToDevice, streams[{idx}]))
+}}
+""".strip()
                 kernel_launches.append(segcode)
-            #code += '\n'.join(reversed(kernel_launches))
-            code += '\n'.join(kernel_launches)
+            
+            if HIGH_DEGREE_FIRST:
+                code += '\n'.join(kernel_launches) + '\n'
+            else:
+                code += '\n'.join(reversed(kernel_launches)) + '\n'
+
         return code.strip()
 
     def generate_cpu_kernel_launches() -> str:
+        if not has_cpu: return ''
+
         code = ''
         cpu_schedule = next(filter(lambda devsched: 
                                       not is_gpu(devsched.device_name),
@@ -173,6 +217,7 @@ f"""
         return code.strip()
 
     def generate_distance_HtoD_synchronize() -> str:
+        if not has_cpu: return ''
         code = ''
         cpu_schedule = next(filter(lambda devsched: 
                                       not is_gpu(devsched.device_name),
@@ -189,6 +234,49 @@ for (int gpu = 0; gpu < num_gpus; gpu++) {{
 }}
 """.strip() + '\n'
         return code.strip()
+
+    def generate_distance_DtoD_synchronize() -> str:
+        if num_gpus <= 1 or INTERLEAVE: return ''
+        code = \
+"""
+for (int src_gpu = 0; src_gpu < num_gpus; src_gpu++) {
+    CUDA_ERRCHK(cudaSetDevice(src_gpu));
+    for (int dst_gpu = 0; dst_gpu < num_gpus; dst_gpu++) {
+        if (src_gpu == dst_gpu) continue;
+
+        for (int block = gpu_blocks[src_gpu];
+                block < gpu_blocks[src_gpu + 1]; block++
+        ) {
+            int start = block_ranges[2 * block];
+            int end   = block_ranges[2 * block + 1];
+            CUDA_ERRCHK(cudaMemcpyAsync(
+                        cu_dists[dst_gpu] + start,
+                        cu_dists[src_gpu] + start,
+                        (end - start) * sizeof(weight_t),
+                        cudaMemcpyDeviceToDevice));
+        }
+    }
+}
+""".strip()
+        return code
+
+    def generate_distance_DtoH_synchronize() -> str:
+        if has_cpu: return ''
+
+        code = '// Copy GPU distances back to host.' + '\n'
+        for devid, segs in enumerate(gpu_contig_mem):
+            if devid != 0: code += '\n'
+            code += f'CUDA_ERRCHK(cudaSetDevice({devid}))' + '\n'
+            for seg in segs:
+                code += \
+f"""
+CUDA_ERRCHK(cudaMemcpyAsync(
+    dist + seg_ranges[{seg[0]}], cu_dists[{devid}] + seg_ranges[{seg[0]}],
+    (seg_ranges[{seg[1] + 1}] - seg_ranges[{seg[0]}]) * sizeof(weight_t), cudaMemcpyDeviceToHost));
+""".strip() + '\n'
+        
+        return code
+
 
     ###########################################################################
     ##    Main Source Code Generation                                        ##
@@ -359,27 +447,11 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
             {indent_after(generate_distance_HtoD_synchronize(), 12)}
 
             // Copy GPU distances peer-to-peer.
-            for (int src_gpu = 0; src_gpu < num_gpus; src_gpu++) {{
-                CUDA_ERRCHK(cudaSetDevice(src_gpu));
-                for (int dst_gpu = 0; dst_gpu < num_gpus; dst_gpu++) {{
-                    if (src_gpu == dst_gpu) continue;
-                    
-                    for (int block = gpu_blocks[src_gpu];
-                            block < gpu_blocks[src_gpu + 1]; block++
-                    ) {{
-                        int start = block_ranges[2 * block];
-                        int end   = block_ranges[2 * block + 1];
-                        CUDA_ERRCHK(cudaMemcpyAsync(
-                                    cu_dists[dst_gpu] + start,
-                                    cu_dists[src_gpu] + start,
-                                    (end - start) * sizeof(weight_t),
-                                    cudaMemcpyDeviceToDevice));
-                    }}
-                }}
-            }}
+            {indent_after(generate_distance_DtoD_synchronize(), 12)}
         }}
         epochs++;
     }}
+    {indent_after(generate_distance_DtoH_synchronize())}
     // Wait for memops to complete.
     for (int gpu = 0; gpu < num_gpus; gpu++) {{
         CUDA_ERRCHK(cudaSetDevice(gpu));
@@ -459,7 +531,7 @@ def indent_all(block: str, indent=4) -> str:
         + indent_after(block, indent)
 
 def is_ifendif(line: str) -> bool:
-    return line[:3] == '#if' or line[:6] == '#endif'
+    return line[:3] == '#if' or line[:6] == '#endif' or line[:7] == '#pragma'
 
 def is_gpu(device_name: str) -> bool:
     return device_name in [
