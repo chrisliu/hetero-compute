@@ -32,7 +32,7 @@
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
-#define SEGMENTS 8
+#define SEGMENTS 36
 #else
 // Current/Up to (inclusive) this depth.
 #define DEPTH 6
@@ -176,6 +176,8 @@ int main(int argc, char *argv[]) {
                 DEVGPU, SSSPGPU::block_min,
                 NUM_BLOCKS * (1024 / thread_count), thread_count);
 #endif // RUN_EPOCH_KERNELS
+
+    enable_all_peer_access();
 
     // Full kernel runs.
 #ifdef RUN_FULL_KERNELS

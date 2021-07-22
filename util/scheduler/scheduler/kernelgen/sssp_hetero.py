@@ -16,9 +16,9 @@ from scheduler.scheduler import (
 )
 
 # Interleave computation and memory transfers.
-INTERLEAVE = False
+INTERLEAVE = True
 # GPUs work on highest degree nodes first.
-HIGH_DEGREE_FIRST = True
+HIGH_DEGREE_FIRST = False
 
 ###############################################################################
 ##### Enums ###################################################################
@@ -300,7 +300,7 @@ for (int gpu = 0; gpu < num_gpus; gpu++) {{
                         code += \
     f"""
     CUDA_ERRCHK(cudaMemcpyAsync(
-        cu_dist[{to_gpu}] + seg_ranges[{start}], cu_dist[{from_gpu}] + seg_ranges[{start}],
+        cu_dists[{to_gpu}] + seg_ranges[{start}], cu_dists[{from_gpu}] + seg_ranges[{start}],
         (seg_ranges[{end + 1}] - seg_ranges[{start}]) * sizeof(weight_t), cudaMemcpyHostToDevice));
     """.strip() + '\n'
                 
@@ -352,7 +352,7 @@ f"""
 constexpr int num_gpus = {num_gpus};
 
 /** Forward decl. */
-void gpu_butterfly_P2P(nid_t *seg_ranges);
+void gpu_butterfly_P2P(nid_t *seg_ranges, weight_t **cu_dists);
 
 /**
  * Runs SSSP kernel heterogeneously across the CPU and GPU. Synchronization 
@@ -409,11 +409,16 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
 
     /// GPU Distances.
     weight_t *cu_dists[num_gpus];
+    cudaStream_t memcpystreams[num_gpus];
     for (int gpu = 0; gpu < num_gpus; gpu++) {{        
         CUDA_ERRCHK(cudaSetDevice(gpu));
+        CUDA_ERRCHK(cudaStreamCreate(&memcpystreams[gpu]));
         CUDA_ERRCHK(cudaMalloc((void **) &cu_dists[gpu], dist_size));
-        CUDA_ERRCHK(cudaMemcpy(cu_dists[gpu], init_dist, dist_size,
-            cudaMemcpyHostToDevice));
+        CUDA_ERRCHK(cudaMemcpyAsync(cu_dists[gpu], dist, dist_size,
+            cudaMemcpyHostToDevice, memcpystreams[gpu]));
+    }}
+    for (int gpu = 0; gpu < num_gpus; gpu++) {{
+        CUDA_ERRCHK(cudaStreamSynchronize(memcpystreams[gpu]));
     }}
 
     // Update counter.
@@ -500,7 +505,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
             {indent_after(generate_distance_HtoD_synchronize(), 12)}
 
             // Copy GPU distances peer-to-peer.
-            gpu_butterfly_P2P(seg_ranges); // Not implmented if INTERLEAVE=true.
+            gpu_butterfly_P2P(seg_ranges, cu_dists); // Not implmented if INTERLEAVE=true.
         }}
         epochs++;
     }}
@@ -563,7 +568,7 @@ void enable_all_peer_access() {{
 /**
  * Butterfly GPU P2P transfer.
  */
-void gpu_butterfly_P2P(nid_t *seg_ranges) {{
+void gpu_butterfly_P2P(nid_t *seg_ranges, weight_t **cu_dists) {{
     {indent_after(generate_butterfly_transfer())}
 }}
 
