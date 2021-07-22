@@ -16,7 +16,7 @@ from scheduler.scheduler import (
 )
 
 # Interleave computation and memory transfers.
-INTERLEAVE = True
+INTERLEAVE = False
 # GPUs work on highest degree nodes first.
 HIGH_DEGREE_FIRST = False
 
@@ -301,7 +301,7 @@ for (int gpu = 0; gpu < num_gpus; gpu++) {{
     f"""
     CUDA_ERRCHK(cudaMemcpyAsync(
         cu_dists[{to_gpu}] + seg_ranges[{start}], cu_dists[{from_gpu}] + seg_ranges[{start}],
-        (seg_ranges[{end + 1}] - seg_ranges[{start}]) * sizeof(weight_t), cudaMemcpyHostToDevice));
+        (seg_ranges[{end + 1}] - seg_ranges[{start}]) * sizeof(weight_t), cudaMemcpyDeviceToDevice));
     """.strip() + '\n'
                 
                 prefix += block
