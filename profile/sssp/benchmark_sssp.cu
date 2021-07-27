@@ -32,7 +32,7 @@
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
-#define SEGMENTS 36
+#define SEGMENTS 24
 #else
 // Current/Up to (inclusive) this depth.
 #define DEPTH 6
@@ -40,8 +40,8 @@
 
 #define NUM_BLOCKS 256
 
-#define DEVCPU Device::intel_i7_9700K
-#define DEVGPU Device::nvidia_quadro_rtx_4000
+#define DEVCPU Device::intel_xeon_e5_2686
+#define DEVGPU Device::nvidia_tesla_k80
 
 /*****************************************************************************
  ***** Helper Functions ******************************************************

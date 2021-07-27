@@ -16,9 +16,9 @@ from scheduler.scheduler import (
 )
 
 # Interleave computation and memory transfers.
-INTERLEAVE = True
+INTERLEAVE = False
 # GPUs work on highest degree nodes first.
-HIGH_DEGREE_FIRST = False
+HIGH_DEGREE_FIRST = True
 
 ###############################################################################
 ##### Enums ###################################################################
@@ -194,7 +194,7 @@ for (int gpu = 0; gpu < num_gpus; gpu++) {{
     if (gpu == {devid}) continue;
 
     CUDA_ERRCHK(cudaStreamWaitEvent(memcpy_streams[{devid} * num_gpus + gpu], 
-            compute_markers[{idx}]));
+            compute_markers[{idx}], 0));
     CUDA_ERRCHK(cudaMemcpyAsync(
             cu_dists[gpu] + block_ranges[{2 * idx}], cu_dists[{devid}] + block_ranges[{2  * idx}],
             (block_ranges[{2 * idx + 1}] - block_ranges[{2 * idx}]) * sizeof(weight_t),
@@ -401,7 +401,7 @@ for (int i = 0; i < num_gpus * num_gpus; i++)
         code = \
 """
 // Sync DtoH copies.
-for (int b = 0; b < num_blocks; b++) {}
+for (int b = 0; b < num_blocks; b++)
     CUDA_ERRCHK(cudaStreamSynchronize(compute_streams[b]));
 """
         return code.strip() + '\n'
@@ -597,7 +597,8 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
             {indent_after(generate_distance_HtoD_synchronize(), 12)}
 
             // Copy GPU distances peer-to-peer.
-            gpu_butterfly_P2P(seg_ranges, cu_dists); // Not implmented if INTERLEAVE=true.
+            // Not implmented if INTERLEAVE=true.
+            gpu_butterfly_P2P(seg_ranges, cu_dists, memcpy_streams); 
 
             // Synchronize HtoD async calls.
             {indent_after(generate_distance_HtoD_synchronize_sync(), 12)}
@@ -661,8 +662,12 @@ void enable_all_peer_access() {{
             if (from == to) continue;
 
             CUDA_ERRCHK(cudaDeviceCanAccessPeer(&can_access_peer, from, to));
-            if(can_access_peer)
+            if(can_access_peer) {{
                 CUDA_ERRCHK(cudaDeviceEnablePeerAccess(to, 0));
+                std::cout << from << " " << to << " yes" << std::endl;
+            }} else {{
+                std::cout << from << " " << to << " no" << std::endl;
+            }}
         }}
     }}
 }}
@@ -706,5 +711,6 @@ def is_gpu(device_name: str) -> bool:
     return device_name in [
         'NVIDIA Quadro RTX 4000',
         'NVIDIA Tesla V100',
+        'NVIDIA Tesla K80',
         'NVIDIA Tesla M60'
     ]

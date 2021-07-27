@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
         init_dist[i] = INF_WEIGHT;
     init_dist[source_id] = 0.0f;
 
-    /*// Check SSSP CPU kernel.*/
     /*{*/
         /*weight_t *dist = nullptr;*/
         /*sssp_pull_cpu(g, epoch_sssp_pull_cpu_one_to_one, init_dist, &dist);*/
