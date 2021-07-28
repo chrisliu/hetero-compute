@@ -32,9 +32,47 @@ struct wnode_t {
     weight_t w;                    // Edge weight.
 };
 
-/** Implementation of undirected CSR graph. */
-// TODO: separate implementation from header (to allow multiple objects using
-//       this header to be compiled independently and linked).
+/** Implementation of unweighted CSR graph. */
+class CSRUWGraph {
+private:
+    /** Sugar for iterators (see gapbs/src/graph.h). */
+    class Neighborhood {
+    public:
+        Neighborhood(nid_t nid_, offset_t *index_, nid_t *neighbors_) 
+            : nid(nid_), index(index_), neighbors(neighbors_) {}
+
+        using iterator = nid_t *;
+        iterator begin() { return &neighbors[index[nid]]; }
+        iterator end() { return &neighbors[index[nid + 1]]; }
+
+    private:
+        nid_t    nid;
+        offset_t *index;
+        nid_t    *neighbors;
+    };
+
+public:
+    offset_t *index     = nullptr; // Points to a give node's neighbors.
+    nid_t    *neighbors = nullptr; // Neighbor list (neighbor nid).
+    nid_t    num_nodes  = 0;       // Number of nodes.
+    offset_t num_edges  = 0;       // Number of edges.
+
+    offset_t get_degree(nid_t nid) const {
+        return index[nid + 1] - index[nid];
+    }
+
+    Neighborhood get_neighbors(nid_t nid) const {
+        return Neighborhood(nid, index, neighbors);
+    }
+
+    bool has_self_cycle(nid_t nid) const {
+        for (const auto &nei : get_neighbors(nid))
+            if (nei == nid) return true;
+        return false;
+    }
+};
+
+/** Implementation of weighted CSR graph. */
 class CSRWGraph {
 private:
     /** Sugar for iterators (see gapbs/src/graph.h). */
@@ -48,9 +86,9 @@ private:
         iterator end() { return &neighbors[index[nid + 1]]; }
 
     private:
-        nid_t nid;
+        nid_t    nid;
         offset_t *index;
-        wnode_t *neighbors;
+        wnode_t  *neighbors;
     };
 
 public:
@@ -78,10 +116,11 @@ public:
  ***** Helper Functions ******************************************************
  *****************************************************************************/
 
+template <typename GraphT>
 class SourcePicker {
 public:
     // TODO: randomly generate seed.
-    SourcePicker(const CSRWGraph * const g_, nid_t const_source_ = -1) 
+    SourcePicker(const GraphT * const g_, nid_t const_source_ = -1) 
         : g(g_), udist(0, g->num_nodes - 1), const_source(const_source_)
     {
         rng = std::mt19937(rand_seed);
@@ -103,7 +142,7 @@ public:
     }
 
 private:
-    const CSRWGraph * const              g;
+    const GraphT * const                 g;
     nid_t                                const_source; // Always pick same 
                                                        // vertex.
     std::mt19937                         rng;
@@ -157,7 +196,28 @@ nid_t *compute_equal_edge_ranges(const CSRWGraph &g, const nid_t num_segments) {
  *****************************************************************************/
 
 /**
- * Deserializes GAPBS generated graph into new data structure.
+ * Deserializes GAPBS generated unweighted graph into new data structure.
+ */
+std::istream& operator>>(std::istream &is, CSRUWGraph &g) {
+    // Read in metadata.
+    is.read(reinterpret_cast<char *>(&g.num_nodes), sizeof(nid_t));
+    is.read(reinterpret_cast<char *>(&g.num_edges), sizeof(offset_t));
+
+    // Read in index list.
+    if (g.index == nullptr) { g.index = new offset_t[g.num_nodes + 1]; }
+    is.read(reinterpret_cast<char *>(g.index), 
+            (g.num_nodes + 1) * sizeof(offset_t));
+
+    // Read in neighbor list.
+    if (g.neighbors == nullptr) { g.neighbors = new nid_t[g.num_edges]; }
+    is.read(reinterpret_cast<char *>(g.neighbors), 
+            g.num_edges * sizeof(wnode_t));
+
+    return is;
+}
+
+/**
+ * Deserializes GAPBS generated weighted graph into new data structure.
  */
 std::istream& operator>>(std::istream &is, CSRWGraph &g) {
     // Read in metadata.

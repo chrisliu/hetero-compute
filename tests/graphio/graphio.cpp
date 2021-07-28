@@ -2,17 +2,21 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <string>
 
 #include "../../src/graph.h"
 #include "../../src/util.h"
 #include "../../src/gapbs/gapbs.h"
+
+const std::string wgraph_fname = "graph.wsg";
+const std::string uwgraph_fname = "graph.sg";
 
 int main() {
     int argc = 5;
     char *argv[] = {
        (char *) "graphio",
        (char *) "-g",
-       (char *) "23",
+       (char *) "16",
        (char *) "-k", 
        (char *) "16",
        NULL
@@ -21,36 +25,78 @@ int main() {
 
     if (not cli.ParseArgs()) { return EXIT_FAILURE; }
 
-    gapbs_wgraph_t gapbs_g = make_graph(cli);
+    GapbsWGraph gapbs_g = make_wgraph(cli);
     
-    std::ofstream ofs("graph.wsg", std::ofstream::out | std::ofstream::binary);
-    ofs << gapbs_g;
-    ofs.close();
+    // Create weighted graph.
+    {
+        std::ofstream ofs(wgraph_fname, 
+                std::ofstream::out | std::ofstream::binary);
+        ofs << gapbs_g;
+        ofs.close();
+    }
 
+    // Create unweighted graph.
+    {
+        GapbsGraph uwg(gapbs_g);
+        std::ofstream ofs(uwgraph_fname,
+                std::ofstream::out | std::ofstream::binary);
+        ofs << uwg;
+        ofs.close();
+    }
+
+    // Get weighted graph.
     CSRWGraph g;
-    std::ifstream ifs("graph.wsg", std::ifstream::in | std::ifstream::binary);
-    Timer timer; timer.Start();
-    ifs >> g;
-    timer.Stop();
-    ifs.close();
+    {
+        std::ifstream ifs(wgraph_fname, 
+                std::ifstream::in | std::ifstream::binary);
+        Timer timer; timer.Start();
+        ifs >> g;
+        timer.Stop();
+        ifs.close();
 
-    std::cout << "Graph load time: " << timer.Millisecs() << " ms." 
-        << std::endl;
+        std::cout << "Weighted graph load time:   " 
+            << timer.Millisecs() << " ms." << std::endl;
+    }
+
+    // Get unweighted graph.
+    CSRUWGraph uwg;
+    {
+        std::ifstream ifs(uwgraph_fname, 
+                std::ifstream::in | std::ifstream::binary);
+        Timer timer; timer.Start();
+        ifs >> uwg;
+        timer.Stop();
+        ifs.close();
+
+        std::cout << "Unweighted graph load time: " 
+            << timer.Millisecs() << " ms." << std::endl;
+    }
 
     assert( g.num_nodes == gapbs_g.num_nodes() );
+    assert( uwg.num_nodes == gapbs_g.num_nodes() );
     for (nid_t nid = 0; nid < g.num_nodes; nid++) {
         assert( g.get_degree(nid) == gapbs_g.in_degree(nid) );
+        assert( uwg.get_degree(nid) == gapbs_g.in_degree(nid) );
 
         for (int v = 0; v < g.get_degree(nid); v++) {
-            gapbs_wnode_t gapbs_node = *(gapbs_g.in_neigh(nid).begin() + v);
-            wnode_t       node       = *(g.get_neighbors(nid).begin() + v);
+            GapbsWNode gapbs_node = *(gapbs_g.in_neigh(nid).begin() + v);
 
+            // Verify neighbor node ID and weight.
+            wnode_t node = *(g.get_neighbors(nid).begin() + v);
             assert( node.v == gapbs_node.v );
             assert( node.w == gapbs_node.w );
+
+            // Verify neighbor node ID.
+            nid_t nei_id = *(uwg.get_neighbors(nid).begin() + v);
+            assert( nei_id == gapbs_node.v );
         }
     }
 
     std::cout << "All tests passed!" << std::endl;
+
+    // Remove generated files.
+    std::remove(wgraph_fname.c_str());
+    std::remove(uwgraph_fname.c_str());
 
     return EXIT_SUCCESS;
 }
