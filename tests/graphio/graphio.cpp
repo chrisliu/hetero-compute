@@ -72,6 +72,7 @@ int main() {
             << timer.Millisecs() << " ms." << std::endl;
     }
 
+    // Testing code.
     assert( g.num_nodes == gapbs_g.num_nodes() );
     assert( uwg.num_nodes == gapbs_g.num_nodes() );
     for (nid_t nid = 0; nid < g.num_nodes; nid++) {
