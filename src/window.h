@@ -3,8 +3,8 @@
  * Based on Scott Beamer's gapbs/src/sliding_queue.h
  */
 
-#ifndef SRC__QUEUE_H
-#define SRC__QUEUE_H
+#ifndef SRC__WINDOW_H
+#define SRC__WINDOW_H
 
 #include <algorithm>
 #include <cstddef>
@@ -137,9 +137,9 @@ void LocalWindow<T>::push_back(T val) {
 template <typename T>
 void LocalWindow<T>::flush() {
     T *parent_buffer = parent.buffer;
-    size_t copy_start = __sync_fetch_and_add(parent.next_end, cur_size);
+    size_t copy_start = __sync_fetch_and_add(&parent.next_end, cur_size);
     std::copy(buffer, buffer + cur_size, parent_buffer + copy_start);
     cur_size = 0;
 }
 
-#endif // SRC__QUEUE_H
+#endif // SRC__WINDOW_H
