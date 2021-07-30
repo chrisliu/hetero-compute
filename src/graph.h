@@ -26,6 +26,9 @@ using offset_t = std::int64_t;     // Edge ID type. Represents number of edges
 // Infinite weight.
 const weight_t INF_WEIGHT = std::numeric_limits<weight_t>::infinity();
 
+// Invalid node.
+const nid_t INVALID_NODE = -1;
+
 /** Directed edge struct (which neighbor node ID and what weight). */
 struct wnode_t {
     nid_t    v;                    // Destination node ID.
@@ -56,6 +59,11 @@ public:
     nid_t    *neighbors = nullptr; // Neighbor list (neighbor nid).
     nid_t    num_nodes  = 0;       // Number of nodes.
     offset_t num_edges  = 0;       // Number of edges.
+
+    ~CSRUWGraph() {
+        delete[] index;
+        delete[] neighbors;
+    }
 
     offset_t get_degree(nid_t nid) const {
         return index[nid + 1] - index[nid];
@@ -96,6 +104,11 @@ public:
     wnode_t  *neighbors = nullptr; // Neighbor list (neighbor nid and weight).
     nid_t    num_nodes  = 0;       // Number of nodes.
     offset_t num_edges  = 0;       // Number of edges.
+
+    ~CSRWGraph() {
+        delete[] index;
+        delete[] neighbors;
+    }
 
     offset_t get_degree(nid_t nid) const {
         return index[nid + 1] - index[nid];
@@ -211,7 +224,7 @@ std::istream& operator>>(std::istream &is, CSRUWGraph &g) {
     // Read in neighbor list.
     if (g.neighbors == nullptr) { g.neighbors = new nid_t[g.num_edges]; }
     is.read(reinterpret_cast<char *>(g.neighbors), 
-            g.num_edges * sizeof(wnode_t));
+            g.num_edges * sizeof(nid_t));
 
     return is;
 }
@@ -240,9 +253,10 @@ std::istream& operator>>(std::istream &is, CSRWGraph &g) {
 /**
  * Wrapper function that deserializes graph from filename.
  */
+template <typename GraphT>
 __inline__
-CSRWGraph load_graph_from_file(char *filename) {
-    CSRWGraph g;
+GraphT load_graph_from_file(char *filename) {
+    GraphT g;
     std::ifstream ifs(filename, std::ifstream::in | std::ifstream::binary);
     ifs >> g;
     ifs.close();
