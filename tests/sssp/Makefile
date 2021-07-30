@@ -1,7 +1,7 @@
 CPP_COMPILER    = nvcc
 CPP_FLAGS       = -O2 --std=c++11
 CROSS_CPP_FLAGS = -fopenmp 
-CXX             = $(CPP_COMPILER) $(CPP_FLAGS) -Xcompiler ${CROSS_CPP_FLAGS}
+CXX             = $(CPP_COMPILER) $(CPP_FLAGS) $(addprefix -Xcompiler , ${CROSS_CPP_FLAGS})
 
 .PHONY: all
 all: sssp_verify.exe

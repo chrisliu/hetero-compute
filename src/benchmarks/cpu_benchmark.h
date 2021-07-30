@@ -99,7 +99,7 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(
 
 segment_res_t benchmark_sssp_cpu(
         const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel,
-        SourcePicker &sp
+        SourcePicker<CSRWGraph> &sp
 ) {
     // Initialize results and calculate segment properties.
     segment_res_t result;

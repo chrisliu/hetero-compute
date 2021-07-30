@@ -181,7 +181,7 @@ int main(int argc, char *argv[]) {
 
     // Full kernel runs.
 #ifdef RUN_FULL_KERNELS
-    SourcePicker sp(&g);
+    SourcePicker<CSRWGraph> sp(&g);
     /*// Run CPU kernel.*/
     /*sp.reset();*/
     /*{*/

@@ -18,7 +18,7 @@
  *   Execution results.
  */
 segment_res_t benchmark_sssp_heterogeneous(const CSRWGraph &g,
-        SourcePicker sp
+        SourcePicker<CSRWGraph> sp
 ) {
     // Initialize results and calculate segment properties.
     segment_res_t result;

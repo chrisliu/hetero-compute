@@ -20,10 +20,10 @@ int main(int argc, char *argv[]) {
     }
 
     // Load graph.
-    CSRWGraph g = load_graph_from_file(argv[1]);
+    CSRWGraph g = load_graph_from_file<CSRWGraph>(argv[1]);
     std::cout << "Loaded graph." << std::endl;
 
-    SourcePicker sp(&g);
+    SourcePicker<CSRWGraph> sp(&g);
     nid_t source_id = sp.next_vertex();
 
     // Compute oracle distance.

@@ -163,7 +163,7 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
 segment_res_t benchmark_sssp_gpu(
         const CSRWGraph &g, 
         sssp_gpu_epoch_func epoch_kernel,
-        SourcePicker &sp,
+        SourcePicker<CSRWGraph> &sp,
         int block_size, int thread_count
 ) {
     // Initialize results and calculate segment properties.

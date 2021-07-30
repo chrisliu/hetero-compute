@@ -3,7 +3,7 @@
 
 #include "../../src/graph.h"
 #include "../../src/window.h"
-#include "../../src/kernels/cpu/bfs.h"
+#include "../../src/kernels/cpu/bfs.cuh"
 
 /** Forward decl. */
 void reset_parents(nid_t *parents, nid_t num_nodes, nid_t source_id);
@@ -14,30 +14,30 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Load graph.
-    CSRUWGraph g = load_graph_from_file<CSRUWGraph>(argv[1]);
-    std::cout << "Loaded graph." << std::endl;
+    /*// Load graph.*/
+    /*CSRUWGraph g = load_graph_from_file<CSRUWGraph>(argv[1]);*/
+    /*std::cout << "Loaded graph." << std::endl;*/
 
-    SourcePicker<CSRUWGraph> sp(&g);
-    nid_t source_id = sp.next_vertex();
+    /*SourcePicker<CSRUWGraph> sp(&g);*/
+    /*nid_t source_id = sp.next_vertex();*/
 
-    SlidingWindow<nid_t> frontier(g.num_nodes); 
-    frontier.push_back(source_id); frontier.slide_window();
+    /*SlidingWindow<nid_t> frontier(g.num_nodes); */
+    /*frontier.push_back(source_id); frontier.slide_window();*/
 
-    nid_t *parents = new nid_t[g.num_nodes];
-    reset_parents(parents, g.num_nodes, source_id);
-    nid_t updated = 0;
+    /*nid_t *parents = new nid_t[g.num_nodes];*/
+    /*reset_parents(parents, g.num_nodes, source_id);*/
+    /*nid_t updated = 0;*/
 
-    int iter = 0;
-    do {
-        updated = 0;
-        epoch_bfs_push_one_to_one(g, parents, frontier, updated);
-        std::cout << "Iter " << iter << ": " << updated << std::endl;
-        frontier.slide_window();
-        iter++;
-    } while (updated != 0);
+    /*int iter = 0;*/
+    /*do {*/
+        /*updated = 0;*/
+        /*epoch_bfs_push_one_to_one(g, parents, frontier, updated);*/
+        /*std::cout << "Iter " << iter << ": " << updated << std::endl;*/
+        /*frontier.slide_window();*/
+        /*iter++;*/
+    /*} while (updated != 0);*/
 
-    delete[] parents;
+    /*delete[] parents;*/
 
     return EXIT_SUCCESS;
 }
