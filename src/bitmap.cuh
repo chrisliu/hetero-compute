@@ -30,13 +30,12 @@ struct Bitmap {
 };
 
 __host__
-void constructor(Bitmap ** const bitmap, const std::size_t num_elements) {
-    *bitmap = new Bitmap;
+void constructor(Bitmap * const bitmap, const std::size_t num_elements) {
     std::size_t bitmap_size = (num_elements + data_size - 1) / data_size;
 
-    (*bitmap)->bitmap_start = new data_t[bitmap_size];
-    (*bitmap)->bitmap_end   = (*bitmap)->bitmap_start + bitmap_size;
-    std::fill((*bitmap)->bitmap_start, (*bitmap)->bitmap_end, 0);
+    bitmap->bitmap_start = new data_t[bitmap_size];
+    bitmap->bitmap_end   = bitmap->bitmap_start + bitmap_size;
+    std::fill(bitmap->bitmap_start, bitmap->bitmap_end, 0);
 }
 
 __host__

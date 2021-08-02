@@ -2,7 +2,6 @@
 #include <iostream>
 
 #include "../../src/graph.h"
-#include "../../src/window.h"
 #include "../../src/kernels/cpu/bfs.cuh"
 
 /** Forward decl. */
@@ -14,15 +13,18 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    /*// Load graph.*/
-    /*CSRUWGraph g = load_graph_from_file<CSRUWGraph>(argv[1]);*/
-    /*std::cout << "Loaded graph." << std::endl;*/
+    // Load graph.
+    CSRUWGraph g = load_graph_from_file<CSRUWGraph>(argv[1]);
+    std::cout << "Loaded graph." << std::endl;
 
-    /*SourcePicker<CSRUWGraph> sp(&g);*/
-    /*nid_t source_id = sp.next_vertex();*/
+    SourcePicker<CSRUWGraph> sp(&g);
+    nid_t source_id = sp.next_vertex();
 
-    /*SlidingWindow<nid_t> frontier(g.num_nodes); */
-    /*frontier.push_back(source_id); frontier.slide_window();*/
+    nid_t *parents = nullptr;
+
+    double exec_time = bfs_do_cpu(g, source_id, &parents);
+    delete[] parents;
+    std::cout << "Kernel completed in " << exec_time << " ms." << std::endl;
 
     /*nid_t *parents = new nid_t[g.num_nodes];*/
     /*reset_parents(parents, g.num_nodes, source_id);*/

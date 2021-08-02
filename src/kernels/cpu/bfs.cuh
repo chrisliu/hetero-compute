@@ -7,7 +7,19 @@
 
 #include "../../bitmap.cuh"
 #include "../../graph.h"
+#include "../../util.h"
 #include "../../window.h"
+
+/** Forward decl. */
+void epoch_bfs_push_one_to_one(const CSRUWGraph &g, nid_t * const parents,
+        SlidingWindow<nid_t> &frontier, nid_t &num_edges);
+void epoch_bfs_pull_one_to_one(const CSRUWGraph &g, nid_t * const parents,
+        Bitmap::Bitmap * const next_frontier,
+        const nid_t start_id, const nid_t end_id,
+        nid_t &num_nodes);
+void conv_bitmap_to_window(
+        const Bitmap::Bitmap * const bitmap, SlidingWindow<nid_t> &window, 
+        const nid_t num_nodes);
 
 /*****************************************************************************
  ***** BFS Kernels ***********************************************************
@@ -19,14 +31,67 @@
  *   - g           <- graph.
  *   - source_id   <- starting node id.
  *   - ret_parents <- pointer to the address of the return parents array.
+ *   - alpha       <- alpha parameter that determines PUSH->PULL.
+ *   - beta        <- beta parameter that determines PULL->PUSH.
  * Returns:
  *   Execution time in milliseconds.
  */
 double bfs_do_cpu(
-        const CSRUWGraph &g, const nid_t source_id, nid_t ** const ret_parents
+        const CSRUWGraph &g, const nid_t source_id, nid_t ** const ret_parents,
+        const int alpha = 15, const int beta = 18
 ) {
+    // Set parents array.
+    nid_t *parents = new nid_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++) 
+        parents[i] = INVALID_NODE;
+    parents[source_id] = source_id;
+
+    // Set push & pull frontiers.
+    nid_t iters = 0;
+    SlidingWindow<nid_t> push_frontier(g.num_nodes);
+    push_frontier.push_back(source_id); push_frontier.slide_window();
+    Bitmap::Bitmap *pull_frontier = new Bitmap::Bitmap;
+    Bitmap::constructor(pull_frontier, g.num_nodes);
+
+    nid_t edges_to_check = g.num_edges;
+    nid_t num_edges = g.get_degree(source_id);
+
+    Timer timer; timer.Start();
+    while (not push_frontier.empty()) {
+        if (num_edges > edges_to_check / alpha) {
+            nid_t num_nodes = push_frontier.size();
+            nid_t prev_num_nodes;
+            do {
+                prev_num_nodes = num_nodes;
+                Bitmap::reset(pull_frontier);
+                epoch_bfs_pull_one_to_one(g, parents, pull_frontier,
+                        0, g.num_nodes, num_nodes);                
+                std::cout << "(Pull) Iter " << iters << " num nodes: " <<
+                    num_nodes << std::endl;
+            } while (num_nodes > prev_num_nodes 
+                    or num_nodes > g.num_nodes / beta);
+            num_edges = 1;
+            conv_bitmap_to_window(pull_frontier, push_frontier, g.num_nodes);
+        } else {
+            edges_to_check -= num_edges;
+            epoch_bfs_push_one_to_one(g, parents, push_frontier, num_edges);        
+            push_frontier.slide_window();
+            std::cout << "(Push) Iter " << iters << " num edges: " << num_edges 
+                << std::endl;
+        }
+        iters++;
+    }
+    timer.Stop();
+
+    // Assign output.
+    *ret_parents = parents;
+
+    // Free memory.
+    Bitmap::destructor(&pull_frontier);
+
     // Setup parents array.
-    return 0.0;
+    return timer.Millisecs();
 }
 
 
@@ -43,9 +108,10 @@ double bfs_do_cpu(
  *   - num_edges <-  number of edges goung out of the next frontier.
  */
 void epoch_bfs_push_one_to_one(
-        const CSRUWGraph &g, nid_t *parents,
+        const CSRUWGraph &g, nid_t * const parents,
         SlidingWindow<nid_t> &frontier, nid_t &num_edges
 ) {
+    num_edges = 0;
     #pragma omp parallel 
     {
         LocalWindow<nid_t> local_frontier(frontier);
@@ -90,11 +156,12 @@ void epoch_bfs_push_one_to_one(
  *   - num_nodes     <- number of nodes in the next frontier.
  */
 void epoch_bfs_pull_one_to_one(
-        const CSRUWGraph &g, nid_t *parents,
-        Bitmap::Bitmap *next_frontier,
+        const CSRUWGraph &g, nid_t * const parents,
+        Bitmap::Bitmap * const next_frontier,
         const nid_t start_id, const nid_t end_id,
         nid_t &num_nodes
 ) {
+    num_nodes = 0;
     #pragma omp parallel
     {
         nid_t local_num_nodes = 0;
@@ -136,9 +203,9 @@ void conv_bitmap_to_window(
         LocalWindow<nid_t> local_window(window);
         
         #pragma omp for nowait
-        for (int i = 0; i < num_nodes; i++)
-            if (Bitmap::get_bit(bitmap, i))
-                local_window.push_back(i);
+        for (int nid = 0; nid < num_nodes; nid++)
+            if (Bitmap::get_bit(bitmap, nid))
+                local_window.push_back(nid);
 
         local_window.flush();
     }
@@ -146,6 +213,5 @@ void conv_bitmap_to_window(
     // Implicit OMP barrier at end of of OMP parallel construct.
     window.slide_window();
 }
-
 
 #endif // SRC_KERNELS_CPU__BFS_H
