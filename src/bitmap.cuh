@@ -45,6 +45,12 @@ void destructor(Bitmap ** const bitmap) {
     *bitmap = nullptr;
 }
 
+__host__ __inline__
+void set_bit_atomic(Bitmap * const bitmap, const std::size_t idx) {
+    data_t bit = static_cast<data_t>(1) << bit_offset(idx);
+    __sync_fetch_and_or(&bitmap->bitmap_start[data_offset(idx)], bit);
+}
+
 __host__ __device__ __inline__
 void set_bit(Bitmap * const bitmap, const std::size_t idx) {
     bitmap->bitmap_start[data_offset(idx)] |= \
@@ -79,54 +85,5 @@ void reset(Bitmap * const bitmap) {
 /*void cuBitmap_reset(Bitmap *cu_bitmap) {*/
 
 /*}*/
-
-
-
-/**
- * Bitmap struct.
- * NOT THREAD SAFE. DOESN'T CHECK FOR OUT-OF-BOUNDS.
- * 
- * Data & Bit Offset Calculation:
- *   n = number of bits contained in each data type.
- *   1. Data offset: index / n
- *   2. Bit offset: lower n bits of index.
- */
-/*class Bitmap {*/
-/*private:*/
-    /*using data_t = char;*/
-    /*static const std::size_t data_size = sizeof(data_t) * 8;*/
-
-/*public:*/
-    /*Bitmap(size_t num_elements)*/
-    /*{*/
-        /*// Bitmap size = round_up(num_elements / data_size)*/
-        /*size_t bitmap_size = (num_elements + data_size - 1) / data_size;*/
-        /*bitmap = new data_t[bitmap_size];*/
-        /*bitmap_end = bitmap + bitmap_size;*/
-    /*}*/
-
-    /*~Bitmap() {*/
-        /*delete[] bitmap;*/
-    /*} */
-
-    /*void reset() {*/
-        /*std::fill(bitmap, bitmap_end, 0);*/
-    /*}*/
-
-    /*void set_bit(size_t idx) {*/
-        /*bitmap[data_offset(idx)] |= static_cast<data_t>(1) << bit_offset(idx);*/
-    /*}*/
-
-    /*bool get_bit(size_t idx) const {*/
-        /*return bitmap[data_offset(idx)] >> bit_offset(idx) & static_cast<data_t>(1);*/
-    /*}*/
-
-/*private:*/
-    /*data_t *bitmap;*/
-    /*data_t *bitmap_end;*/
-
-    /*static std::size_t data_offset(size_t n) { return n / data_size; }*/
-    /*static std::size_t bit_offset(size_t n) { return n & (data_size - 1); }*/
-/*};*/
 
 #endif // SRC__BITMAP_H

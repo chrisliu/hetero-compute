@@ -182,14 +182,14 @@ int main(int argc, char *argv[]) {
     // Full kernel runs.
 #ifdef RUN_FULL_KERNELS
     SourcePicker<CSRWGraph> sp(&g);
-    /*// Run CPU kernel.*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "SSSP CPU:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_cpu(g,*/
-                /*epoch_sssp_pull_cpu_one_to_one, sp);*/
-        /*std::cout << res;*/
-    /*}*/
+    // Run CPU kernel.
+    sp.reset();
+    {
+        std::cout << "SSSP CPU:" << std::endl;
+        segment_res_t res = benchmark_sssp_cpu(g,
+                epoch_sssp_pull_cpu_one_to_one, sp);
+        std::cout << res;
+    }
 
     /*[>// Run GPU naive kernel.<]*/
     /*sp.reset();*/
@@ -219,13 +219,13 @@ int main(int argc, char *argv[]) {
     /*}*/
 
     // Run heterogeneous kernel.
-    sp.reset();
-    {
-        // Load in schedule.
-        std::cout << "SSSP heterogeneous:" << std::endl;
-        segment_res_t res = benchmark_sssp_heterogeneous(g, sp);
-        std::cout << res;
-    }
+    /*sp.reset();*/
+    /*{*/
+        /*// Load in schedule.*/
+        /*std::cout << "SSSP heterogeneous:" << std::endl;*/
+        /*segment_res_t res = benchmark_sssp_heterogeneous(g, sp);*/
+        /*std::cout << res;*/
+    /*}*/
 #endif // RUN_FULL_KERNELS
 
     return EXIT_SUCCESS;

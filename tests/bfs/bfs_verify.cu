@@ -1,11 +1,20 @@
 #include <cstdlib>
+#include <deque>
+#include <iomanip>
 #include <iostream>
+
+// Maximum number of errors to print out.
+#define MAX_PRINT_ERRORS 10
 
 #include "../../src/graph.h"
 #include "../../src/kernels/cpu/bfs.cuh"
 
 /** Forward decl. */
-void reset_parents(nid_t *parents, nid_t num_nodes, nid_t source_id);
+bool verify_parents(const nid_t * const depths, const nid_t * const parents,
+        const nid_t num_nodes, const nid_t source_id);
+nid_t *compute_proper_depth(const CSRUWGraph &g, const nid_t source_id);
+void reset_parents(nid_t * const parents, const nid_t num_nodes, 
+        const nid_t source_id);
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -20,41 +29,136 @@ int main(int argc, char *argv[]) {
     SourcePicker<CSRUWGraph> sp(&g);
     nid_t source_id = sp.next_vertex();
 
-    nid_t *parents = nullptr;
+    // Compute expected depths.
+    nid_t *depths = compute_proper_depth(g, source_id);
+    std::cout << "Computed oracle depths." << std::endl;
 
-    double exec_time = bfs_do_cpu(g, source_id, &parents);
-    delete[] parents;
-    std::cout << "Kernel completed in " << exec_time << " ms." << std::endl;
+    // Check BFS CPU push kernel.
+    {
+        nid_t *parents = nullptr;
+        bfs_push_cpu(g, source_id, &parents);
 
-    /*nid_t *parents = new nid_t[g.num_nodes];*/
-    /*reset_parents(parents, g.num_nodes, source_id);*/
-    /*nid_t updated = 0;*/
+        std::cout << "Verifying BFS CPU push kernel ..." << std::endl;
+        bool success = verify_parents(depths, parents, g.num_nodes, source_id);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
-    /*int iter = 0;*/
-    /*do {*/
-        /*updated = 0;*/
-        /*epoch_bfs_push_one_to_one(g, parents, frontier, updated);*/
-        /*std::cout << "Iter " << iter << ": " << updated << std::endl;*/
-        /*frontier.slide_window();*/
-        /*iter++;*/
-    /*} while (updated != 0);*/
+        delete[] parents;
+    }
 
-    /*delete[] parents;*/
+    // Check BFS CPU pull kernel.
+    {
+        nid_t *parents = nullptr;
+        bfs_pull_cpu(g, source_id, &parents);
+
+        std::cout << "Verifying BFS CPU pull kernel ..." << std::endl;
+        bool success = verify_parents(depths, parents, g.num_nodes, source_id);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
+
+        delete[] parents;
+    }
+
+    // Check BFS CPU DO kernel.
+    {
+        nid_t *parents = nullptr;
+        bfs_do_cpu(g, source_id, &parents);
+
+        std::cout << "Verifying BFS CPU DO kernel ..." << std::endl;
+        bool success = verify_parents(depths, parents, g.num_nodes, source_id);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
+
+        delete[] parents;
+    }
+
+    delete[] depths;
 
     return EXIT_SUCCESS;
 }
 
-/**
- * Reset parents array. Set source ID's parent to itself.
- * Parameters:
- *   - parents   <- node parent list.
- *   - num_nodes <- number of nodes in the graph.
- *   - source_id <- starting node id.
- */
-__inline__
-void reset_parents(nid_t *parents, nid_t num_nodes, nid_t source_id) {
-    #pragma omp parallel for
-    for (int i = 0; i < num_nodes; i++)
-        parents[i] = INVALID_NODE;
-    parents[source_id] = source_id;
+bool verify_parents(const nid_t * const depths, const nid_t * const parents,
+        const nid_t num_nodes, const nid_t source_id
+) {
+    bool is_correct = true;
+    nid_t error_count = 0;
+
+    for (nid_t u = 0; u < num_nodes; u++) {
+        // If is unexplored node, make sure ut's actually supposed to be 
+        // unexplored.
+        if (parents[u] == INVALID_NODE) {
+            if (depths[u] != INVALID_NODE) {
+                if (error_count < MAX_PRINT_ERRORS)
+                    std::cout << " > " << u << ": "
+                        << parents[u] << " != " << depths[u] << std::endl;
+                is_correct = false;
+                error_count++;
+            }
+        // If source node, check parent equals utself.
+        } else if (u == source_id) {
+            if (parents[u] != source_id) {
+                if (error_count < MAX_PRINT_ERRORS)
+                    std::cout << " > " << u << ": "
+                        << parents[u] << " != " << source_id << std::endl;
+                is_correct = false;
+                error_count++;
+            }
+        // If is explored node, make sure it's at the correct depth.
+        } else {
+            if (depths[u] != depths[parents[u]] + 1) {
+                if (error_count < MAX_PRINT_ERRORS)
+                    std::cout << " > " << u << ": "
+                        << depths[u] << " != " << depths[parents[u]] << " + 1"
+                        << std::endl;
+                is_correct = false;
+                error_count++;
+            }
+        }
+    }
+
+    // Print extra error count if any.
+    if (error_count >= MAX_PRINT_ERRORS) {
+        nid_t more_error_count = error_count - MAX_PRINT_ERRORS;
+        std::cout << " > ... " << more_error_count << " more error"
+            << (more_error_count != 1 ? "s" : "") << "!" << std::endl;
+    }
+
+    return is_correct;
 }
+
+/**
+ * Compute and return BFS frontier depths.
+ * Source node's depth is 0. Source node's neighbors' depth is 0 + 1, etc.
+ * Remaining nodes that don't belong to the source node's component is 
+ * set to INVALID_NODE.
+ * 
+ * Parameters:
+ *   - g         <- graph.
+ *   - source_id <- source node id.
+ * Returns:
+ *    BFS frontier depth for each node (heap allocated).
+ */
+nid_t *compute_proper_depth(const CSRUWGraph &g, const nid_t source_id) {
+    // Initialize depths array.
+    nid_t *depths = new nid_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        depths[i] = INVALID_NODE;
+    depths[source_id] = 0;
+
+    // Compute depths.
+    std::deque<nid_t> frontier = { source_id };
+    while (not frontier.empty()) {
+        nid_t u = frontier.front(); frontier.pop_front();
+
+        for (nid_t v : g.get_neighbors(u)) {
+            if (depths[v] == INVALID_NODE) {
+                depths[v] = depths[u] + 1;
+                frontier.push_back(v);
+            }
+        }
+    }
+
+    return depths;
+}
+

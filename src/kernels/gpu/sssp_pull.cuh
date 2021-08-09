@@ -104,21 +104,6 @@ double sssp_pull_gpu(
  ******************************************************************************/
 
 /**
- * Runs SSSP push on GPU for the first epoch.
- *
- * Parameters:
- *   - neighbors     <- neighbors list to process.
- *   - num_neighbors <- number of neighbors.
- *   - dist          <- distance array.
- */
-__global__
-void epoch_sssp_push_gpu(
-        const wnode_t *neighbors, const nid_t num_neighbors, weight_t *dist
-) {
-
-}
-
-/**
  * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
  * Each thread is assigned to a single node.
  *
@@ -143,7 +128,7 @@ void epoch_sssp_pull_gpu_one_to_one(
 
     int local_updated = 0;
 
-    for (int nid = start_id + tid; nid < end_id; nid += num_threads) {
+    for (nid_t nid = start_id + tid; nid < end_id; nid += num_threads) {
         weight_t new_dist = dist[nid];
 
         // Find shortest candidate distance.
@@ -194,14 +179,14 @@ void epoch_sssp_pull_gpu_warp_min(
 
     nid_t local_updated = 0;
 
-    for (int nid = start_id + tid / warpSize; nid < end_id; 
+    for (nid_t nid = start_id + tid / warpSize; nid < end_id; 
             nid += (num_threads / warpSize)
     ) {
         weight_t new_dist = dist[nid];
 
         // Find shortest candidate distance.
         nid_t index_id = nid - start_id;
-        for (int i = index[index_id] + warpid; i < index[index_id + 1]; 
+        for (offset_t i = index[index_id] + warpid; i < index[index_id + 1]; 
                 i += warpSize
         ) {
             weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;
@@ -259,13 +244,13 @@ void epoch_sssp_pull_gpu_block_min(
 
     nid_t local_updated = 0;
 
-    for (int nid = start_id + blockIdx.x; nid < end_id; nid += gridDim.x) {
+    for (nid_t nid = start_id + blockIdx.x; nid < end_id; nid += gridDim.x) {
         weight_t new_dist = dist[nid];
 
         // Find shortest candidate distance.
         nid_t index_id = nid - start_id;
-        for (int i = index[index_id] + threadIdx.x; i < index[index_id + 1];
-                i += blockDim.x
+        for (offset_t i = index[index_id] + threadIdx.x; 
+                i < index[index_id + 1]; i += blockDim.x
         ) {
             weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;
             new_dist = min(prop_dist, new_dist);

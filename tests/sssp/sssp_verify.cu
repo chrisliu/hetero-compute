@@ -1,13 +1,13 @@
 #include <cstdlib>
 #include <iostream>
 
+// Maximum number of errors to print out.
+#define MAX_PRINT_ERRORS 10
+
 #include "../../src/graph.h"
 #include "../../src/kernels/cpu/sssp_pull.h"
 #include "../../src/kernels/gpu/sssp_pull.cuh"
 #include "../../src/kernels/heterogeneous/sssp_pull.cuh"
-
-// Maximum number of errors to print out.
-#define MAX_PRINT_ERRORS 10
 
 /** Forward decl. */
 bool verify(const weight_t *oracle_dist, const weight_t *dist, 
@@ -103,6 +103,8 @@ int main(int argc, char *argv[]) {
         delete[] dist;
     }
 
+    delete[] oracle_dist;
+
     return EXIT_SUCCESS;
 }
 
@@ -131,7 +133,8 @@ bool verify(const weight_t *oracle_dist, const weight_t *dist,
         }
     }
 
-    if (error_count > MAX_PRINT_ERRORS) {
+    // Print extra error count if any.
+    if (error_count >= MAX_PRINT_ERRORS) {
         nid_t more_error_count = error_count - MAX_PRINT_ERRORS;
         std::cout << " > ... " << more_error_count << " more error"
             << (more_error_count != 1 ? "s" : "") << "!" << std::endl;
