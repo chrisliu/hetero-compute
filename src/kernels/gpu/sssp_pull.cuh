@@ -10,7 +10,7 @@
 #include <ostream>
 #include <vector>
 
-#include "../kernel_types.h"
+#include "../kernel_types.cuh"
 #include "../../cuda.cuh"
 #include "../../devices.h"
 #include "../../graph.h"
@@ -20,8 +20,8 @@
 __global__ 
 void epoch_sssp_pull_gpu_one_to_one(
         const offset_t *index, const wnode_t *neighbors, 
-        const nid_t start_id, const nid_t end_id, weight_t *dist, nid_t *updated
-);
+        const nid_t start_id, const nid_t end_id, weight_t *dist, 
+        nid_t *updated);
 
 /*****************************************************************************
  ***** SSSP Kernel ***********************************************************

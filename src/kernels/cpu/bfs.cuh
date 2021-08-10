@@ -52,17 +52,16 @@ double bfs_do_cpu(
     reset_parents(parents, g.num_nodes, source_id);
 
     // Set push & pull frontiers.
-    nid_t iters = 0;
     SlidingWindow<nid_t> push_frontier(g.num_nodes);
     push_frontier.push_back(source_id); push_frontier.slide_window();
-    Bitmap::Bitmap *pull_frontier = new Bitmap::Bitmap;
-    Bitmap::constructor(pull_frontier, g.num_nodes);
-    Bitmap::Bitmap *pull_next_frontier = new Bitmap::Bitmap;
-    Bitmap::constructor(pull_next_frontier, g.num_nodes);
+
+    Bitmap::Bitmap *pull_frontier      = Bitmap::constructor(g.num_nodes);
+    Bitmap::Bitmap *pull_next_frontier = Bitmap::constructor(g.num_nodes);
 
     nid_t edges_to_check = g.num_edges;
     nid_t num_edges = g.get_degree(source_id);
 
+    nid_t iters = 0;
     Timer timer; timer.Start();
     while (not push_frontier.empty()) {
         // If PULL.
@@ -165,12 +164,10 @@ double bfs_pull_cpu(
     reset_parents(parents, g.num_nodes, source_id);
 
     // Set pull frontier.
-    Bitmap::Bitmap *frontier = new Bitmap::Bitmap;
-    Bitmap::constructor(frontier, g.num_nodes);
+    Bitmap::Bitmap *frontier = Bitmap::constructor(g.num_nodes);
     Bitmap::set_bit(frontier, source_id); // Set source node.
 
-    Bitmap::Bitmap *next_frontier = new Bitmap::Bitmap;
-    Bitmap::constructor(next_frontier, g.num_nodes);
+    Bitmap::Bitmap *next_frontier = Bitmap::constructor(g.num_nodes);
 
     nid_t num_nodes;
     
@@ -243,6 +240,10 @@ void epoch_bfs_push_one_to_one(
 
 /**
  * Runs BFS pull on CPU for one epoch for a particular range of nodes.
+ * 
+ * Note: Bitmap is not set atomically as long as OMP schedule blocks are
+ *       aligned to the size of a bitmap's internal data type.
+ *
  * Parameters:
  *   - g             <- graph.
  *   - parents       <- node parent list.

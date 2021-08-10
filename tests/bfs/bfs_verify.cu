@@ -1,15 +1,21 @@
-#include <cstdlib>
-#include <deque>
-#include <iomanip>
-#include <iostream>
-
 // Maximum number of errors to print out.
 #define MAX_PRINT_ERRORS 10
 
+#include <cstdlib>
+#include <deque>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <string>
+
 #include "../../src/graph.h"
 #include "../../src/kernels/cpu/bfs.cuh"
+#include "../../src/kernels/gpu/bfs.cuh"
 
 /** Forward decl. */
+void verify(const CSRUWGraph &g, 
+        const nid_t * const depths, const nid_t source_id,
+        std::string kernel_name, std::function<nid_t *(void)> get_parents);
 bool verify_parents(const nid_t * const depths, const nid_t * const parents,
         const nid_t num_nodes, const nid_t source_id);
 nid_t *compute_proper_depth(const CSRUWGraph &g, const nid_t source_id);
@@ -33,48 +39,56 @@ int main(int argc, char *argv[]) {
     nid_t *depths = compute_proper_depth(g, source_id);
     std::cout << "Computed oracle depths." << std::endl;
 
-    // Check BFS CPU push kernel.
-    {
-        nid_t *parents = nullptr;
-        bfs_push_cpu(g, source_id, &parents);
+    /*// Check BFS CPU push kernel.*/
+    /*verify(g, depths, source_id, "BFS CPU push", */
+            /*[&](){*/
+                /*nid_t *parents = nullptr;*/
+                /*bfs_push_cpu(g, source_id, &parents);*/
+                /*return parents;*/
+            /*}*/
+    /*);*/
 
-        std::cout << "Verifying BFS CPU push kernel ..." << std::endl;
-        bool success = verify_parents(depths, parents, g.num_nodes, source_id);
-        std::cout << " > Verification " << (success ? "succeeded" : "failed")
-            << "!" << std::endl;
+    /*// Check BFS CPU pull kernel.*/
+    /*verify(g, depths, source_id, "BFS CPU push",*/
+            /*[&](){*/
+                /*nid_t *parents = nullptr;*/
+                /*bfs_pull_cpu(g, source_id, &parents);*/
+                /*return parents;*/
+            /*}*/
+    /*);*/
 
-        delete[] parents;
-    }
+    /*// Check BFS DO kernel.*/
+    /*verify(g, depths, source_id, "BFS CPU DO",*/
+            /*[&](){*/
+                /*nid_t *parents = nullptr;*/
+                /*bfs_do_cpu(g, source_id, &parents);*/
+                /*return parents;*/
+            /*}*/
+    /*);*/
 
-    // Check BFS CPU pull kernel.
-    {
-        nid_t *parents = nullptr;
-        bfs_pull_cpu(g, source_id, &parents);
-
-        std::cout << "Verifying BFS CPU pull kernel ..." << std::endl;
-        bool success = verify_parents(depths, parents, g.num_nodes, source_id);
-        std::cout << " > Verification " << (success ? "succeeded" : "failed")
-            << "!" << std::endl;
-
-        delete[] parents;
-    }
-
-    // Check BFS CPU DO kernel.
-    {
-        nid_t *parents = nullptr;
-        bfs_do_cpu(g, source_id, &parents);
-
-        std::cout << "Verifying BFS CPU DO kernel ..." << std::endl;
-        bool success = verify_parents(depths, parents, g.num_nodes, source_id);
-        std::cout << " > Verification " << (success ? "succeeded" : "failed")
-            << "!" << std::endl;
-
-        delete[] parents;
-    }
+    // Check BFS GPU one-to-one kernel.
+    verify(g, depths, source_id, "BFS GPU one-to-one",
+            [&](){
+                nid_t *parents = nullptr;
+                bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_one_to_one);
+                return parents;
+            }
+    );
 
     delete[] depths;
 
     return EXIT_SUCCESS;
+}
+
+void verify(const CSRUWGraph &g, 
+        const nid_t * const depths, const nid_t source_id,
+        std::string kernel_name, std::function<nid_t *(void)> get_parents
+) {
+    nid_t *parents = get_parents();
+
+    std::cout << "Verifying " << kernel_name << " kernel ..." << std::endl;
+    if(verify_parents(depths, parents, g.num_nodes, source_id))
+        std::cout << " > Verification success!" << std::endl;
 }
 
 bool verify_parents(const nid_t * const depths, const nid_t * const parents,

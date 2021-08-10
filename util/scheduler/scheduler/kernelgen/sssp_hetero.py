@@ -422,7 +422,7 @@ f"""
 #include <omp.h>
 #include <vector>
 
-#include "../kernel_types.h"
+#include "../kernel_types.cuh"
 #include "../cpu/sssp_pull.h"
 #include "../gpu/sssp_pull.cuh"
 #include "../../cuda.cuh"

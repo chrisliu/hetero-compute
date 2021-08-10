@@ -85,7 +85,7 @@ void copy_subgraph_to_device(const CSRWGraph &g,
         const nid_t start_id, const nid_t end_id
 ) {
     // Local copies of cu_index and cu_neighbors.
-    offset_t *cu_index    = nullptr;
+    offset_t *cu_index     = nullptr;
     wnode_t  *cu_neighbors = nullptr;
 
     // Get number of nodes and edges.

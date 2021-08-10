@@ -10,7 +10,7 @@
 #include "benchmark.h"
 #include "../graph.h"
 #include "../util.h"
-#include "../kernels/kernel_types.h"
+#include "../kernels/kernel_types.cuh"
 #include "../kernels/cpu/sssp_pull.h"
 
 /******************************************************************************

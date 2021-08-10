@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "../kernel_types.h"
+#include "../kernel_types.cuh"
 #include "../../graph.h"
 #include "../../util.h"
 

@@ -10,7 +10,7 @@
 #include "benchmark.h"
 #include "../cuda.cuh"
 #include "../graph.h"
-#include "../kernels/kernel_types.h"
+#include "../kernels/kernel_types.cuh"
 #include "../kernels/gpu/sssp_pull.cuh"
 
 /**

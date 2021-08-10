@@ -5,13 +5,96 @@
 #ifndef SRC_KERNELS_GPU__BFS_CUH
 #define SRC_KERNELS_GPU__BFS_CUH
 
+#include <algorithm>
+
+#include "../kernel_types.cuh"
 #include "../../bitmap.cuh"
+#include "../../cuda.cuh"
 #include "../../graph.h"
 #include "../../util.h"
 
 /*****************************************************************************
  ***** BFS Epoch Kernels *****************************************************
  *****************************************************************************/
+
+double bfs_gpu(
+        const CSRUWGraph &g, const nid_t source_id, 
+        nid_t ** const ret_parents, bfs_gpu_epoch_func epoch_kernel,
+        int block_count = 64, int thread_count = 1024
+) {
+    // Copy graph.
+    offset_t *cu_index      = nullptr;
+    nid_t    *cu_neighbors  = nullptr;
+    size_t   index_size     = g.num_nodes * sizeof(offset_t);
+    size_t   neighbors_size = g.num_edges * sizeof(nid_t);
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_index, index_size));
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_neighbors, neighbors_size));
+    CUDA_ERRCHK(cudaMemcpy(cu_index, g.index, index_size,
+                cudaMemcpyHostToDevice));
+    CUDA_ERRCHK(cudaMemcpy(cu_neighbors, g.neighbors, neighbors_size,
+                cudaMemcpyHostToDevice));
+
+    // Allocate parents array.
+    nid_t *parents = new nid_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        parents[i] = INVALID_NODE;
+    parents[source_id] = source_id;
+
+    nid_t *cu_parents = nullptr;
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_parents, g.num_nodes * sizeof(nid_t)));
+    CUDA_ERRCHK(cudaMemcpy(cu_parents, parents, g.num_nodes * sizeof(nid_t),
+                cudaMemcpyHostToDevice));
+
+    // Allocate frontiers' bitmaps.
+    Bitmap::Bitmap *frontier         = Bitmap::cu_cpu_constructor(g.num_nodes);
+    Bitmap::Bitmap *next_frontier    = Bitmap::cu_cpu_constructor(g.num_nodes);
+    Bitmap::Bitmap *cu_frontier      = Bitmap::cu_constructor(frontier);
+    Bitmap::Bitmap *cu_next_frontier = Bitmap::cu_constructor(next_frontier);
+
+    Bitmap::cu_cpu_set_bit(frontier, source_id);
+
+    // Allocate num nodes counter.
+    nid_t num_nodes, *cu_num_nodes = nullptr;
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_num_nodes, sizeof(nid_t)));
+
+    // Run kernel.
+    Timer t; t.Start();
+    do {
+        CUDA_ERRCHK(cudaMemset(cu_num_nodes, 0, sizeof(nid_t)));
+
+        (*epoch_kernel)<<<block_count, thread_count>>>(
+                cu_index, cu_neighbors, cu_parents, 0, g.num_nodes,
+                cu_frontier, cu_next_frontier, cu_num_nodes);
+
+        CUDA_ERRCHK(cudaMemcpy(&num_nodes, cu_num_nodes, sizeof(nid_t),
+                    cudaMemcpyDeviceToHost));
+        std::swap(frontier, next_frontier);
+        std::swap(cu_frontier, cu_next_frontier);
+        Bitmap::cu_cpu_reset(next_frontier);
+    } while (num_nodes != 0);
+    t.Stop();
+
+    // Copy results.
+    CUDA_ERRCHK(cudaMemcpy(parents, cu_parents, g.num_nodes * sizeof(nid_t),
+                cudaMemcpyDeviceToHost));
+    *ret_parents = parents;
+
+    // Free memory.
+    CUDA_ERRCHK(cudaFree(cu_parents));
+    CUDA_ERRCHK(cudaFree(cu_num_nodes));
+    Bitmap::cu_cpu_destructor(&frontier);
+    Bitmap::cu_cpu_destructor(&next_frontier);
+    Bitmap::cu_destructor(&cu_frontier);
+    Bitmap::cu_destructor(&cu_next_frontier);
+
+    return t.Millisecs();
+}
+
+/*****************************************************************************
+ ***** BFS Epoch Kernels *****************************************************
+ *****************************************************************************/
+
 /**
  * Runs BFS pull on GPU for one epoch on a range of nodes [start_id, end_id).
  * Each thread is assigned to a single node.
@@ -28,25 +111,27 @@
  */
 __global__ 
 void epoch_bfs_pull_gpu_one_to_one(
-        const offset_t * const index, const wnode_t * const neighbors, 
+        const offset_t * const index, const nid_t * const neighbors, 
         nid_t * const parents,
         const nid_t start_id, const nid_t end_id, 
-        Bitmap::Bitmap * const next_frontier, nid_t * const num_nodes
+        const Bitmap::Bitmap * const frontier,
+        Bitmap::Bitmap * const next_frontier, 
+        nid_t * const num_nodes
 ) {
     int tid         = blockIdx.x * blockDim.x + threadIdx.x;
     int num_threads = gridDim.x * blockDim.x;
 
     nid_t local_num_nodes = 0;
 
-    for (nid_t nid = start_id + tid; nid < end_id; nid += num_threads) {
+    for (nid_t u = start_id + tid; u < end_id; u += num_threads) {
         // If current node hasn't been explored yet.
-        if (parents[nid] == INVALID_NODE) {
-            for (offset_t i = index[nid]; i < index[nid + 1]; i++) {
+        if (parents[u] == INVALID_NODE) {
+            for (offset_t i = index[u]; i < index[u + 1]; i++) {
                 nid_t nei = neighbors[i];
                 // If parent has been explored.
-                if (parents[nei] != INVALID_NODE) {
-                    parents[nid] = nei;
-                    Bitmap::set_bit(next_frontier, nid);
+                if (Bitmap::get_bit(frontier, nei)) {
+                    parents[u] = nei;
+                    Bitmap::cu_set_bit_atomic(next_frontier, u);
                     local_num_nodes++;
                     break; // Early exit.
                 }
@@ -57,6 +142,5 @@ void epoch_bfs_pull_gpu_one_to_one(
     // Push update count.
     atomicAdd(num_nodes, local_num_nodes);
 }
-
 
 #endif // SRC_KERNELS_GPU__BFS_CUH
