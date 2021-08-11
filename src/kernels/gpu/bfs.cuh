@@ -17,6 +17,20 @@
  ***** BFS Epoch Kernels *****************************************************
  *****************************************************************************/
 
+__global__
+void print_stats() {
+    int tid         = blockIdx.x * blockDim.x + threadIdx.x;
+    int warpid      = tid & (warpSize - 1); // ID within a warp.
+    int num_threads = gridDim.x * blockDim.x;
+    if (tid == 0) {
+        printf("blockDim: %d\n", blockDim.x);
+        printf("gridDim: %d\n", gridDim.x);
+        printf("warpSize: %d\n", warpSize);
+        printf("num_threads: %d\n", num_threads);
+        printf("warpid: %d\n", warpid);
+    }
+}
+
 double bfs_gpu(
         const CSRUWGraph &g, const nid_t source_id, 
         nid_t ** const ret_parents, bfs_gpu_epoch_func epoch_kernel,
@@ -25,7 +39,7 @@ double bfs_gpu(
     // Copy graph.
     offset_t *cu_index      = nullptr;
     nid_t    *cu_neighbors  = nullptr;
-    size_t   index_size     = g.num_nodes * sizeof(offset_t);
+    size_t   index_size     = (g.num_nodes + 1) * sizeof(offset_t);
     size_t   neighbors_size = g.num_edges * sizeof(nid_t);
     CUDA_ERRCHK(cudaMalloc((void **) &cu_index, index_size));
     CUDA_ERRCHK(cudaMalloc((void **) &cu_neighbors, neighbors_size));
@@ -59,6 +73,8 @@ double bfs_gpu(
     CUDA_ERRCHK(cudaMalloc((void **) &cu_num_nodes, sizeof(nid_t)));
 
     // Run kernel.
+    print_stats<<<block_count, thread_count>>>();
+    CUDA_ERRCHK(cudaDeviceSynchronize());
     Timer t; t.Start();
     do {
         CUDA_ERRCHK(cudaMemset(cu_num_nodes, 0, sizeof(nid_t)));
@@ -106,7 +122,8 @@ double bfs_gpu(
  *   - parents       <- node parent list.
  *   - start_id      <- starting node id.
  *   - end_id        <- ending node id (exclusive).
- *   - next_froniter <- nodes in the next frontier.
+ *   - frontier      <- current frontier.
+ *   - next_frontier <- nodes in the next frontier.
  *   - num_nodes     <- number of nodes in the next frontier.
  */
 __global__ 
@@ -142,5 +159,131 @@ void epoch_bfs_pull_gpu_one_to_one(
     // Push update count.
     atomicAdd(num_nodes, local_num_nodes);
 }
+
+/**
+ * Runs BFS pull on GPU for one epoch on a range of nodes [start_id, end_id).
+ * Each thread is assigned to a warp.
+ *
+ * Parameters:
+ *   - index         <- graph index where index 0 = start_id, 1 = start_id + 1,
+ *                      ... , (end_id - start_id - 1) = end_id - 1.
+ *   - neighbors     <- graph neighbors corresponding to the indexed nodes.
+ *   - parents       <- node parent list.
+ *   - start_id      <- starting node id.
+ *   - end_id        <- ending node id (exclusive).
+ *   - frontier      <- current frontier.
+ *   - next_frontier <- nodes in the next frontier.
+ *   - num_nodes     <- number of nodes in the next frontier.
+ */
+template <int sync_iters = 1>
+__global__ 
+void epoch_bfs_pull_gpu_warp(
+        const offset_t * const index, const nid_t * const neighbors, 
+        nid_t * const parents,
+        const nid_t start_id, const nid_t end_id, 
+        const Bitmap::Bitmap * const frontier,
+        Bitmap::Bitmap * const next_frontier, 
+        nid_t * const num_nodes
+) {
+    int tid         = blockIdx.x * blockDim.x + threadIdx.x;
+    int warpid      = tid & (warpSize - 1); // ID within a warp.
+    int num_threads = gridDim.x * blockDim.x;
+
+    nid_t local_num_nodes = 0;
+
+    for (nid_t u = start_id + tid / warpSize; u < end_id; 
+            u += (num_threads / warpSize)
+    ) {
+        // If current node hasn't been explored yet.
+        if (parents[u] == INVALID_NODE) {
+            nid_t index_id = u - start_id;
+            bool in_next_frontier = false;
+            
+            for (offset_t i = index[index_id] + warpid; i < index[index_id + 1];
+                    i += warpSize
+            ) {
+                if (Bitmap::get_bit(frontier, neighbors[i])) {
+                    parents[u] = neighbors[i];
+                    Bitmap::cu_set_bit_atomic(next_frontier, u);
+                    in_next_frontier = true;
+                }
+
+                __syncwarp(); // Why is this required??? 
+                              // Should be in lock-step and no shared memory
+                              // operations are being performed.
+                              // *_sync operations should sync before the 
+                              // intrinsic is called anyways.
+                in_next_frontier = warp_all_or(in_next_frontier);
+
+                if (in_next_frontier) {
+                    if (warpid == 0)
+                        local_num_nodes++;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Push update count.
+    if (warpid == 0)
+        atomicAdd(num_nodes, local_num_nodes);
+}
+            /*nid_t    index_id = u - start_id;*/
+            /*offset_t iters    = (index[index_id + 1] - index[index_id] + warpSize - 1)*/
+                                    /*/ warpSize; // Number of warpSize iters.*/
+            /*bool     in_next_frontier = false;*/
+            /*nid_t    parent   = INVALID_NODE;*/
+
+            /*// For each neighbor in warpSize chunks.*/
+            /*for (offset_t i = 0; i < iters; i += sync_iters) {*/
+                /*for (offset_t sync_i = 0; sync_i < sync_iters; sync_i++) {*/
+                    /*offset_t idx = index[index_id] + (i + sync_i) * warpSize*/
+                            /*+ warpid;*/
+
+                    /*// If IS A neighbor and is in the current frontier,*/
+                    /*// remember it.*/
+                    /*if (idx < index[index_id + 1]*/
+                            /*and Bitmap::get_bit(frontier, neighbors[idx])*/
+                    /*) {*/
+                        /*in_next_frontier = true;*/
+                        /*parent = neighbors[idx];*/
+                    /*}*/
+                /*}*/
+
+                /*// Synchronize between warps.*/
+                /*__syncwarp();*/
+                /*in_next_frontier = warp_or(in_next_frontier);*/
+                /*parent           = warp_max(parent);*/
+
+                /*// If one or more suitable parents are found, update*/
+                /*// current node with one of them.*/
+                /*if (warpid == 0 and in_next_frontier) {*/
+                    /*parents[u] = parent;*/
+                    /*Bitmap::cu_set_bit_atomic(next_frontier, u);*/
+                    /*local_num_nodes++;*/
+                    /*break; // Early exit.*/
+                /*}*/
+            /*}*/
+
+                /*// If parent is in frontier.*/
+                /*if (Bitmap::get_bit(frontier, neighbors[i])) {*/
+                    /*in_next_frontier = true;*/
+                    /*parent = neighbors[i];*/
+                /*}*/
+                
+                /*// Synchronize.*/
+                /*__syncwarp();*/
+                /*in_next_frontier = warp_all_or(in_next_frontier);*/
+                /*parent           = warp_max(parent);*/
+
+                /*// If a suitable parent has been found.*/
+                /*if (in_next_frontier) {*/
+                    /*if (warpid == 0) {*/
+                        /*parents[u] = parent;*/
+                        /*Bitmap::cu_set_bit_atomic(next_frontier, u);*/
+                        /*local_num_nodes++;*/
+                    /*}*/
+                    /*break;*/
+                /*}*/
 
 #endif // SRC_KERNELS_GPU__BFS_CUH

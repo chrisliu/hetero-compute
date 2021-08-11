@@ -220,8 +220,8 @@ void epoch_bfs_push_one_to_one(
 
                 // If parent is not set and hasn't been set between
                 // instructions, update.
-                if (cur_parent == INVALID_NODE and 
-                        __sync_val_compare_and_swap(&parents[nei], cur_parent, nid)
+                if (cur_parent == INVALID_NODE 
+                        and __sync_val_compare_and_swap(&parents[nei], cur_parent, nid)
                 ) {
                     local_frontier.push_back(nei);
                     local_num_edges += g.get_degree(nei);

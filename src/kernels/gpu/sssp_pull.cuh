@@ -51,7 +51,7 @@ double sssp_pull_gpu(
     // Copy graph.
     offset_t *cu_index      = nullptr;
     wnode_t  *cu_neighbors  = nullptr;
-    size_t   index_size     = g.num_nodes * sizeof(offset_t);
+    size_t   index_size     = (g.num_nodes + 1) * sizeof(offset_t);
     size_t   neighbors_size = g.num_edges * sizeof(wnode_t);
     CUDA_ERRCHK(cudaMalloc((void **) &cu_index, index_size));
     CUDA_ERRCHK(cudaMalloc((void **) &cu_neighbors, neighbors_size));
@@ -133,7 +133,7 @@ void epoch_sssp_pull_gpu_one_to_one(
 
         // Find shortest candidate distance.
         nid_t index_id = nid - start_id;
-        for (int i = index[index_id]; i < index[index_id + 1]; i++) {
+        for (offset_t i = index[index_id]; i < index[index_id + 1]; i++) {
             weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;
             new_dist = min(prop_dist, new_dist);
         }
@@ -174,7 +174,7 @@ void epoch_sssp_pull_gpu_warp_min(
         weight_t *dist, nid_t *updated
 ) {
     int tid         = blockIdx.x * blockDim.x + threadIdx.x;
-    int warpid      = tid % warpSize; // ID within a warp.
+    int warpid      = tid & (warpSize - 1); // ID within a warp.
     int num_threads = gridDim.x * blockDim.x;
 
     nid_t local_updated = 0;
@@ -236,7 +236,7 @@ void epoch_sssp_pull_gpu_block_min(
     __shared__ weight_t block_dist[32];
 
     int tid    = blockIdx.x * blockDim.x + threadIdx.x;
-    int warpid = tid % warpSize; // ID within a warp.
+    int warpid = tid & (warpSize - 1); // ID within a warp.
     
     // Initialize block distances.
     if (threadIdx.x / warpSize == 0)

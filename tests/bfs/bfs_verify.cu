@@ -66,11 +66,20 @@ int main(int argc, char *argv[]) {
             /*}*/
     /*);*/
 
-    // Check BFS GPU one-to-one kernel.
-    verify(g, depths, source_id, "BFS GPU one-to-one",
+    /*// Check BFS GPU one-to-one kernel.*/
+    /*verify(g, depths, source_id, "BFS GPU one-to-one",*/
+            /*[&](){*/
+                /*nid_t *parents = nullptr;*/
+                /*std::cout << bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_one_to_one) << std::endl;*/
+                /*return parents;*/
+            /*}*/
+    /*);*/
+
+    // Check BFS GPU warp kernel.
+    verify(g, depths, source_id, "BFS GPU warp",
             [&](){
                 nid_t *parents = nullptr;
-                bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_one_to_one);
+                std::cout << bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_warp, 1, 32) << std::endl;
                 return parents;
             }
     );
@@ -97,6 +106,11 @@ bool verify_parents(const nid_t * const depths, const nid_t * const parents,
     bool is_correct = true;
     nid_t error_count = 0;
 
+    nid_t bad_unexplored    = 0;
+    nid_t bad_source        = 0;
+    nid_t bad_explored_less = 0;
+    nid_t bad_explored_more = 0;
+
     for (nid_t u = 0; u < num_nodes; u++) {
         // If is unexplored node, make sure ut's actually supposed to be 
         // unexplored.
@@ -107,6 +121,7 @@ bool verify_parents(const nid_t * const depths, const nid_t * const parents,
                         << parents[u] << " != " << depths[u] << std::endl;
                 is_correct = false;
                 error_count++;
+                bad_unexplored++;
             }
         // If source node, check parent equals utself.
         } else if (u == source_id) {
@@ -116,6 +131,7 @@ bool verify_parents(const nid_t * const depths, const nid_t * const parents,
                         << parents[u] << " != " << source_id << std::endl;
                 is_correct = false;
                 error_count++;
+                bad_source++;
             }
         // If is explored node, make sure it's at the correct depth.
         } else {
@@ -126,6 +142,8 @@ bool verify_parents(const nid_t * const depths, const nid_t * const parents,
                         << std::endl;
                 is_correct = false;
                 error_count++;
+                bad_explored_less += depths[u] < depths[parents[u]] + 1;
+                bad_explored_more += depths[u] > depths[parents[u]] + 1;
             }
         }
     }
@@ -136,6 +154,12 @@ bool verify_parents(const nid_t * const depths, const nid_t * const parents,
         std::cout << " > ... " << more_error_count << " more error"
             << (more_error_count != 1 ? "s" : "") << "!" << std::endl;
     }
+
+    std::cout << " > Stats:" << std::endl
+              << " >   source:     " << bad_source << std::endl
+              << " >   unexplored: " << bad_unexplored << std::endl
+              << " >   explored <: " << bad_explored_less << std::endl
+              << " >   explored >: " << bad_explored_more << std::endl;
 
     return is_correct;
 }
