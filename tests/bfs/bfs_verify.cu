@@ -1,5 +1,5 @@
 // Maximum number of errors to print out.
-#define MAX_PRINT_ERRORS 10
+#define MAX_PRINT_ERRORS 70
 
 #include <cstdlib>
 #include <deque>
@@ -48,38 +48,38 @@ int main(int argc, char *argv[]) {
             /*}*/
     /*);*/
 
-    /*// Check BFS CPU pull kernel.*/
-    /*verify(g, depths, source_id, "BFS CPU push",*/
-            /*[&](){*/
-                /*nid_t *parents = nullptr;*/
-                /*bfs_pull_cpu(g, source_id, &parents);*/
-                /*return parents;*/
-            /*}*/
-    /*);*/
+    // Check BFS CPU pull kernel.
+    verify(g, depths, source_id, "BFS CPU pull",
+            [&](){
+                nid_t *parents = nullptr;
+                bfs_pull_cpu(g, source_id, &parents);
+                return parents;
+            }
+    );
 
-    /*// Check BFS DO kernel.*/
-    /*verify(g, depths, source_id, "BFS CPU DO",*/
-            /*[&](){*/
-                /*nid_t *parents = nullptr;*/
-                /*bfs_do_cpu(g, source_id, &parents);*/
-                /*return parents;*/
-            /*}*/
-    /*);*/
+    // Check BFS DO kernel.
+    verify(g, depths, source_id, "BFS CPU DO",
+            [&](){
+                nid_t *parents = nullptr;
+                bfs_do_cpu(g, source_id, &parents);
+                return parents;
+            }
+    );
 
-    /*// Check BFS GPU one-to-one kernel.*/
-    /*verify(g, depths, source_id, "BFS GPU one-to-one",*/
-            /*[&](){*/
-                /*nid_t *parents = nullptr;*/
-                /*std::cout << bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_one_to_one) << std::endl;*/
-                /*return parents;*/
-            /*}*/
-    /*);*/
+    // Check BFS GPU one-to-one kernel.
+    verify(g, depths, source_id, "BFS GPU one-to-one",
+            [&](){
+                nid_t *parents = nullptr;
+                bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_one_to_one, 256, 1024);
+                return parents;
+            }
+    );
 
     // Check BFS GPU warp kernel.
     verify(g, depths, source_id, "BFS GPU warp",
             [&](){
                 nid_t *parents = nullptr;
-                std::cout << bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_warp, 1, 32) << std::endl;
+                bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_warp, 256, 1024);
                 return parents;
             }
     );
@@ -123,7 +123,7 @@ bool verify_parents(const nid_t * const depths, const nid_t * const parents,
                 error_count++;
                 bad_unexplored++;
             }
-        // If source node, check parent equals utself.
+        // If source node, check parent equals itself.
         } else if (u == source_id) {
             if (parents[u] != source_id) {
                 if (error_count < MAX_PRINT_ERRORS)
@@ -139,6 +139,7 @@ bool verify_parents(const nid_t * const depths, const nid_t * const parents,
                 if (error_count < MAX_PRINT_ERRORS)
                     std::cout << " > " << u << ": "
                         << depths[u] << " != " << depths[parents[u]] << " + 1"
+                        << " (parent: " << parents[u] << ")"
                         << std::endl;
                 is_correct = false;
                 error_count++;
@@ -155,11 +156,12 @@ bool verify_parents(const nid_t * const depths, const nid_t * const parents,
             << (more_error_count != 1 ? "s" : "") << "!" << std::endl;
     }
 
-    std::cout << " > Stats:" << std::endl
-              << " >   source:     " << bad_source << std::endl
-              << " >   unexplored: " << bad_unexplored << std::endl
-              << " >   explored <: " << bad_explored_less << std::endl
-              << " >   explored >: " << bad_explored_more << std::endl;
+    if (error_count != 0)
+        std::cout << " > Stats:" << std::endl
+                  << " >   source:     " << bad_source << std::endl
+                  << " >   unexplored: " << bad_unexplored << std::endl
+                  << " >   explored <: " << bad_explored_less << std::endl
+                  << " >   explored >: " << bad_explored_more << std::endl;
 
     return is_correct;
 }

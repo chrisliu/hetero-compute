@@ -73,10 +73,12 @@ double bfs_gpu(
     CUDA_ERRCHK(cudaMalloc((void **) &cu_num_nodes, sizeof(nid_t)));
 
     // Run kernel.
-    print_stats<<<block_count, thread_count>>>();
-    CUDA_ERRCHK(cudaDeviceSynchronize());
+    /*print_stats<<<block_count, thread_count>>>();*/
+    /*CUDA_ERRCHK(cudaDeviceSynchronize());*/
     Timer t; t.Start();
+    nid_t epoch = 0;
     do {
+        epoch++;
         CUDA_ERRCHK(cudaMemset(cu_num_nodes, 0, sizeof(nid_t)));
 
         (*epoch_kernel)<<<block_count, thread_count>>>(
@@ -189,6 +191,7 @@ void epoch_bfs_pull_gpu_warp(
     int warpid      = tid & (warpSize - 1); // ID within a warp.
     int num_threads = gridDim.x * blockDim.x;
 
+
     nid_t local_num_nodes = 0;
 
     for (nid_t u = start_id + tid / warpSize; u < end_id; 
@@ -198,21 +201,20 @@ void epoch_bfs_pull_gpu_warp(
         if (parents[u] == INVALID_NODE) {
             nid_t index_id = u - start_id;
             bool in_next_frontier = false;
+
+            offset_t iters = (index[index_id + 1] - index[index_id] + warpSize - 1)
+                                / warpSize; // Number of warpSize iters.
             
-            for (offset_t i = index[index_id] + warpid; i < index[index_id + 1];
-                    i += warpSize
-            ) {
-                if (Bitmap::get_bit(frontier, neighbors[i])) {
+            for (offset_t iter_i = 0; iter_i < iters; iter_i++) {
+                offset_t i = index[index_id] + iter_i * warpSize + warpid;
+                if (i < index[index_id + 1] and 
+                        Bitmap::get_bit(frontier, neighbors[i])
+                ) {
                     parents[u] = neighbors[i];
                     Bitmap::cu_set_bit_atomic(next_frontier, u);
                     in_next_frontier = true;
                 }
 
-                __syncwarp(); // Why is this required??? 
-                              // Should be in lock-step and no shared memory
-                              // operations are being performed.
-                              // *_sync operations should sync before the 
-                              // intrinsic is called anyways.
                 in_next_frontier = warp_all_or(in_next_frontier);
 
                 if (in_next_frontier) {
@@ -228,6 +230,7 @@ void epoch_bfs_pull_gpu_warp(
     if (warpid == 0)
         atomicAdd(num_nodes, local_num_nodes);
 }
+
             /*nid_t    index_id = u - start_id;*/
             /*offset_t iters    = (index[index_id + 1] - index[index_id] + warpSize - 1)*/
                                     /*/ warpSize; // Number of warpSize iters.*/
