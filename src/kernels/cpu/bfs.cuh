@@ -43,9 +43,9 @@ void reset_parents(nid_t * const parents, const nid_t num_nodes,
  * Returns:
  *   Execution time in milliseconds.
  */
+template <int alpha = 15, int beta = 18>
 double bfs_do_cpu(
-        const CSRUWGraph &g, const nid_t source_id, nid_t ** const ret_parents,
-        const int alpha = 15, const int beta = 18
+        const CSRUWGraph &g, const nid_t source_id, nid_t ** const ret_parents
 ) {
     // Set parents array.
     nid_t *parents = new nid_t[g.num_nodes];
@@ -208,12 +208,12 @@ void epoch_bfs_push_one_to_one(
         const CSRUWGraph &g, nid_t * const parents,
         SlidingWindow<nid_t> &frontier, nid_t &num_edges
 ) {
-    #pragma omp parallel 
+    /*#pragma omp parallel */
     {
         LocalWindow<nid_t> local_frontier(frontier);
         nid_t local_num_edges = 0;
     
-        #pragma omp for nowait
+        /*#pragma omp for nowait*/
         for (const nid_t nid : frontier) {
             for (nid_t nei : g.get_neighbors(nid)) {
                 nid_t cur_parent = parents[nei];
@@ -233,7 +233,7 @@ void epoch_bfs_push_one_to_one(
         local_frontier.flush();
 
         // Push update count.
-        #pragma omp atomic
+        /*#pragma omp atomic*/
         num_edges += local_num_edges;
     }
 }

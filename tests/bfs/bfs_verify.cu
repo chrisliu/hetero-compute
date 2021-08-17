@@ -40,13 +40,13 @@ int main(int argc, char *argv[]) {
     std::cout << "Computed oracle depths." << std::endl;
 
     /*// Check BFS CPU push kernel.*/
-    /*verify(g, depths, source_id, "BFS CPU push", */
-            /*[&](){*/
-                /*nid_t *parents = nullptr;*/
-                /*bfs_push_cpu(g, source_id, &parents);*/
-                /*return parents;*/
-            /*}*/
-    /*);*/
+    verify(g, depths, source_id, "BFS CPU push",
+            [&](){
+                nid_t *parents = nullptr;
+                bfs_push_cpu(g, source_id, &parents);
+                return parents;
+            }
+    );
 
     // Check BFS CPU pull kernel.
     verify(g, depths, source_id, "BFS CPU pull",
@@ -84,6 +84,15 @@ int main(int argc, char *argv[]) {
             }
     );
 
+    // Check BFS GPU warp kernel.
+    verify(g, depths, source_id, "BFS GPU sync warp",
+            [&](){
+                nid_t *parents = nullptr;
+                bfs_gpu(g, source_id, &parents, epoch_bfs_sync_pull_gpu_warp, 256, 1024);
+                return parents;
+            }
+    );
+
     delete[] depths;
 
     return EXIT_SUCCESS;
@@ -98,6 +107,8 @@ void verify(const CSRUWGraph &g,
     std::cout << "Verifying " << kernel_name << " kernel ..." << std::endl;
     if(verify_parents(depths, parents, g.num_nodes, source_id))
         std::cout << " > Verification success!" << std::endl;
+
+    delete[] parents;
 }
 
 bool verify_parents(const nid_t * const depths, const nid_t * const parents,

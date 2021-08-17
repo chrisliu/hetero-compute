@@ -9,11 +9,11 @@
 
 #include "../../src/graph.h"
 #include "../../src/util.h"
-#include "../../src/benchmarks/gpu_benchmark.cuh"
 #include "../../src/benchmarks/cpu_benchmark.cuh"
 #include "../../src/benchmarks/heterogeneous_benchmark.cuh"
-#include "../../src/kernels/cpu/sssp_pull.h"
-#include "../../src/kernels/gpu/sssp_pull.cuh"
+#include "../../src/benchmarks/gpu_benchmark.cuh"
+#include "../../src/kernels/cpu/bfs.cuh"
+#include "../../src/kernels/gpu/bfs.cuh"
 
 /*****************************************************************************
  ***** Config ****************************************************************
@@ -40,8 +40,8 @@
 
 #define NUM_BLOCKS 256
 
-#define DEVCPU Device::intel_xeon_e5_2686
-#define DEVGPU Device::nvidia_tesla_k80
+#define DEVCPU Device::intel_i7_9700K
+#define DEVGPU Device::nvidia_quadro_rtx_4000
 
 /*****************************************************************************
  ***** Helper Functions ******************************************************
@@ -143,12 +143,12 @@ void run_treebenchmark(CSRWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " [graph.wsg]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [graph.sg]" << std::endl;
         return EXIT_FAILURE;
     }
 
     // Load in graph.
-    CSRWGraph g;
+    CSRUWGraph g;
     std::cout << "Loading graph ..." << std::endl;
 
     std::ifstream ifs(argv[1], std::ifstream::in | std::ifstream::binary);
@@ -159,64 +159,99 @@ int main(int argc, char *argv[]) {
 
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
-#ifdef RUN_EPOCH_KERNELS
-    // Run CPU benchmarks.
-    run_treebenchmark<SSSPCPUTreeBenchmark>(g, DEVCPU,
-            SSSPCPU::one_to_one);
+/*#ifdef RUN_EPOCH_KERNELS*/
+    /*// Run CPU benchmarks.*/
+    /*run_treebenchmark<SSSPCPUTreeBenchmark>(g, DEVCPU,*/
+            /*SSSPCPU::one_to_one);*/
 
-    // Run GPU benchmarks.
-    run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,
-            SSSPGPU::one_to_one, NUM_BLOCKS, 1024);
-    run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,
-            SSSPGPU::warp_min, NUM_BLOCKS, 1024);
+    /*// Run GPU benchmarks.*/
+    /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,*/
+            /*SSSPGPU::one_to_one, NUM_BLOCKS, 1024);*/
+    /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,*/
+            /*SSSPGPU::warp_min, NUM_BLOCKS, 1024);*/
 
-    std::vector<int> thread_counts = {64, 128, 256, 512, 1024};
-    for (int thread_count : thread_counts)
-        run_treebenchmark<SSSPGPUTreeBenchmark>(g,
-                DEVGPU, SSSPGPU::block_min,
-                NUM_BLOCKS * (1024 / thread_count), thread_count);
-#endif // RUN_EPOCH_KERNELS
+    /*std::vector<int> thread_counts = {64, 128, 256, 512, 1024};*/
+    /*for (int thread_count : thread_counts)*/
+        /*run_treebenchmark<SSSPGPUTreeBenchmark>(g,*/
+                /*DEVGPU, SSSPGPU::block_min,*/
+                /*NUM_BLOCKS * (1024 / thread_count), thread_count);*/
+/*#endif // RUN_EPOCH_KERNELS*/
 
-    enable_all_peer_access();
+    /*enable_all_peer_access();*/
 
     // Full kernel runs.
 #ifdef RUN_FULL_KERNELS
-    SourcePicker<CSRWGraph> sp(&g);
-    // Run CPU kernel.
+    SourcePicker<CSRUWGraph> sp(&g);
+
+    /*// Run CPU push kernel.*/
+    /*sp.reset();*/
+    /*{*/
+        /*std::cout << "BFS CPU push:" << std::endl;*/
+        /*segment_res_t res = benchmark_bfs_cpu(g, bfs_push_cpu, sp);*/
+        /*std::cout << res;*/
+    /*}*/
+
+    /*// Run CPU pull kernel.*/
+    /*sp.reset();*/
+    /*{*/
+        /*std::cout << "BFS CPU pull:" << std::endl;*/
+        /*segment_res_t res = benchmark_bfs_cpu(g, bfs_pull_cpu, sp);*/
+        /*std::cout << res;*/
+    /*}*/
+
+    /*// Run CPU DO kernel.*/
+    /*sp.reset();*/
+    /*{*/
+        /*std::cout << "BFS CPU DO:" << std::endl;*/
+        /*segment_res_t res = benchmark_bfs_cpu(g, bfs_do_cpu, sp);*/
+        /*std::cout << res;*/
+    /*}*/
+
+    // Run GPU one-to-one kernel.
     sp.reset();
     {
-        std::cout << "SSSP CPU:" << std::endl;
-        segment_res_t res = benchmark_sssp_cpu(g,
-                epoch_sssp_pull_cpu_one_to_one, sp);
+        std::cout << "BFS GPU one-to-one:" << std::endl;
+        segment_res_t res = benchmark_bfs_gpu(g,
+                epoch_bfs_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);
         std::cout << res;
     }
 
-    /*[>// Run GPU naive kernel.<]*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "SSSP GPU naive:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_gpu(g,*/
-                /*epoch_sssp_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);*/
-        /*std::cout << res;*/
-    /*}*/
+    // Run GPU warp kernel.
+    sp.reset();
+    {
+        std::cout << "BFS GPU warp:" << std::endl;
+        segment_res_t res = benchmark_bfs_gpu(g,
+                epoch_bfs_pull_gpu_warp, sp, NUM_BLOCKS, 1024);
+        std::cout << res;
+    }
 
-    /*[>// Run GPU warp min kernel.<]*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "SSSP GPU warp min:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_gpu(g,*/
-                /*epoch_sssp_pull_gpu_warp_min, sp, NUM_BLOCKS, 1024);*/
-        /*std::cout << res;*/
-    /*}*/
+    // Run GPU sync warp kernel.
+    sp.reset();
+    {
+        std::cout << "BFS GPU sync warp (sync_iters = 1):" 
+            << std::endl;
+        segment_res_t res = benchmark_bfs_gpu(g,
+                epoch_bfs_sync_pull_gpu_warp<1>, sp, NUM_BLOCKS, 1024);
+        std::cout << res;
+    }
 
-    /*[>// Run GPU block min kernel.<]*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "SSSP GPU block min:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_gpu(g,*/
-                /*epoch_sssp_pull_gpu_block_min, sp, NUM_BLOCKS, 1024);*/
-        /*std::cout << res;*/
-    /*}*/
+    sp.reset();
+    {
+        std::cout << "BFS GPU sync warp (sync_iters = 2):" 
+            << std::endl;
+        segment_res_t res = benchmark_bfs_gpu(g,
+                epoch_bfs_sync_pull_gpu_warp<2>, sp, NUM_BLOCKS, 1024);
+        std::cout << res;
+    }
+
+    sp.reset();
+    {
+        std::cout << "BFS GPU sync warp (sync_iters = 3):" 
+            << std::endl;
+        segment_res_t res = benchmark_bfs_gpu(g,
+                epoch_bfs_sync_pull_gpu_warp<3>, sp, NUM_BLOCKS, 1024);
+        std::cout << res;
+    }
 
     // Run heterogeneous kernel.
     /*sp.reset();*/
