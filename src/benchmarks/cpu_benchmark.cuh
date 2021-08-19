@@ -7,11 +7,11 @@
 
 #include <omp.h>
 
-#include "benchmark.h"
-#include "../graph.h"
+#include "benchmark.cuh"
+#include "../graph.cuh"
 #include "../util.h"
 #include "../kernels/kernel_types.cuh"
-#include "../kernels/cpu/sssp_pull.h"
+#include "../kernels/cpu/sssp.cuh"
 
 /*****************************************************************************
  ***** Benchmarks ************************************************************

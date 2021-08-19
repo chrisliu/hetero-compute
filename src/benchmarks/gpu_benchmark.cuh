@@ -7,15 +7,15 @@
 
 #include <random>
 
-#include "benchmark.h"
+#include "benchmark.cuh"
 #include "../cuda.cuh"
-#include "../graph.h"
+#include "../graph.cuh"
 #include "../kernels/kernel_types.cuh"
 #include "../kernels/gpu/bfs.cuh"
-#include "../kernels/gpu/sssp_pull.cuh"
+#include "../kernels/gpu/sssp.cuh"
 
 /**
- * Tree based microbenchmark for GPU implementations.
+ * Tree-based SSSP benchmark for GPU implementations.
  */
 class SSSPGPUTreeBenchmark : public SSSPTreeBenchmark {
 public:
@@ -38,6 +38,26 @@ protected:
     weight_t   *cu_dist;      // (GPU) distances.
     nid_t      *cu_updated;   // (GPU) update counter.
 
+    segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
+};
+
+/**
+ * Tree-based BFS benchmark for GPU implementations.
+ */
+class BFSGPUTreeBenchmark : public BFSTreeBenchmark {
+public:
+    BFSGPUTreeBenchmark(
+            const CSRUWGraph *g_, bfs_gpu_epoch_func epoch_kernel_,
+            const int block_count_ = 64, const int thread_count_ = 1024);
+    ~BFSGPUTreeBenchmark();
+
+    void set_epoch_kernel(bfs_gpu_epoch_func epoch_kerenl_);
+
+    // Exposed block count and thread count to allow dynamic configuration.
+    int block_count;   // Number of blocks to launch kernel.
+    int thread_count;  // Number of threads to launch kernel.
+
+protected:
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
 };
 
@@ -115,7 +135,6 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
 
     // Copy subgraph.
     copy_subgraph_to_device(*g, &cu_index, &cu_neighbors, start_id, end_id);
-    /*copy_subgraph_to_device(start_id, end_id);*/
 
     // Time kernel (avg of BENCHMARK_TIME_ITERS).
     double total_time = 0.0;
@@ -160,6 +179,8 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
 
     return result;
 }
+
+
 
 /*****************************************************************************
  ***** Kernel Benchmark Implementations **************************************

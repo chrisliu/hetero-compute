@@ -99,6 +99,14 @@ void reset(Bitmap * const bitmap) {
     std::fill(bitmap->buffer, bitmap->buffer + bitmap->size, 0);
 }
 
+__host__ __inline__
+bool copy(const Bitmap * const from, Bitmap * const to) {
+    if (from->size != to->size) return false;
+
+    std::copy(from->buffer, from->buffer + from->size, to->buffer);
+    return true;
+}
+
 /*****************************************************************************
  ***** GPU-specific Implementations ******************************************
  *****************************************************************************/

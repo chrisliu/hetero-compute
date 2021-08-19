@@ -7,13 +7,13 @@
 #include <type_traits>
 #include <vector>
 
-#include "../../src/graph.h"
+#include "../../src/graph.cuh"
 #include "../../src/util.h"
 #include "../../src/benchmarks/gpu_benchmark.cuh"
 #include "../../src/benchmarks/cpu_benchmark.cuh"
 #include "../../src/benchmarks/heterogeneous_benchmark.cuh"
-#include "../../src/kernels/cpu/sssp_pull.h"
-#include "../../src/kernels/gpu/sssp_pull.cuh"
+#include "../../src/kernels/cpu/sssp.cuh"
+#include "../../src/kernels/gpu/sssp.cuh"
 
 /*****************************************************************************
  ***** Config ****************************************************************
@@ -26,9 +26,9 @@
 // Save results to YAML files.
 #define SAVE_RESULTS
 // Run epoch kernels.
-/*#define RUN_EPOCH_KERNELS*/
+#define RUN_EPOCH_KERNELS
 // Run full kernels.
-#define RUN_FULL_KERNELS
+/*#define RUN_FULL_KERNELS*/
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
@@ -111,7 +111,7 @@ std::string get_kernel_name(IdT ker, OptArgsT ...args) {
  */
 template <class BenchmarkT, typename IdT, typename ...OptArgsT,
          typename = typename std::enable_if<
-            std::is_base_of<TreeBenchmark, BenchmarkT>::value>>
+            std::is_base_of<TreeBenchmark<CSRWGraph>, BenchmarkT>::value>>
 void run_treebenchmark(CSRWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
     // Run benchmark.
     // TOOD: this is a hacky way to pass arguments into the benchmark function.

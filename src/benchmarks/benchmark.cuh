@@ -14,13 +14,17 @@
 // Output precision.
 #define BENCHMARK_PRECISION 10
 
+#include <algorithm>
 #include <iomanip>
 #include <omp.h>
 #include <ostream>
 #include <random>
 #include <string>
+#include <vector>
 
-#include "../graph.h"
+#include "../graph.cuh"
+#include "../bitmap.cuh"
+#include "../kernels/cpu/bfs.cuh"
 
 /******************************************************************************
  ***** Results Data Structures ************************************************
@@ -70,7 +74,7 @@ std::ostream &operator<<(std::ostream &os, const tree_res_t &res);
  ******************************************************************************/
 
 /**
- * Base class for a tree based microbenchmark.
+ * Base class for a tree-based benchmark.
  * 
  * Given a graph g, the ordered list of nodes (by descending degree) will be
  * divided into <num_segments> groups. Each segment will roughly have 
@@ -78,14 +82,15 @@ std::ostream &operator<<(std::ostream &os, const tree_res_t &res);
  *
  * Implementations should implement the benchmark_segment.
  */ 
+template <typename GraphT>
 class TreeBenchmark {
 public:
-    TreeBenchmark(const CSRWGraph *g_);
+    TreeBenchmark(const GraphT *g_);
     tree_res_t  tree_microbenchmark(const int depth);
     layer_res_t layer_microbenchmark(const nid_t num_segments);
 
 protected:
-    const CSRWGraph *g; // CPU graph.
+    const GraphT *g; // CPU graph.
 
     // Benchmark segment of nodes of range [start, end).
     virtual segment_res_t benchmark_segment(const nid_t start_id, 
@@ -98,13 +103,38 @@ protected:
  * SSSP tree based benchmark.
  * Initializes a random distance vector to test on.
  */
-class SSSPTreeBenchmark : public TreeBenchmark {
+class SSSPTreeBenchmark : public TreeBenchmark<CSRWGraph> {
 public:
     SSSPTreeBenchmark(const CSRWGraph *g_);
     ~SSSPTreeBenchmark();
 
 protected:
     weight_t *init_dist; // Initial distances.
+};
+
+/**
+ * BFS tree-based benchmark.
+ *
+ * Precomputes parents array and frontiers for each level.
+ */
+class BFSTreeBenchmark : public TreeBenchmark<CSRUWGraph> {
+public:
+    BFSTreeBenchmark(const CSRUWGraph *g_);
+    ~BFSTreeBenchmark();
+
+    bool  set_epoch(nid_t epoch);
+    nid_t get_epoch() const;
+    nid_t num_epochs() const;
+
+protected:
+    std::vector<nid_t *>          parents_arr;
+    std::vector<Bitmap::Bitmap *> frontiers;
+    nid_t                         cur_epoch;
+
+    nid_t          *get_parents() const;
+    Bitmap::Bitmap *get_frontier() const;
+
+    virtual nid_t *compute_ranges(const nid_t num_segments) const;
 };
 
 /******************************************************************************
@@ -192,7 +222,8 @@ std::ostream& operator<<(std::ostream &os, const tree_res_t &res) {
  ***** Microbenchmark Classes' Default Implementations ************************
  ******************************************************************************/
 
-TreeBenchmark::TreeBenchmark(const CSRWGraph *g_)
+template <typename GraphT>
+TreeBenchmark<GraphT>::TreeBenchmark(const GraphT *g_)
     : g(g_)
 {}
 
@@ -204,7 +235,8 @@ TreeBenchmark::TreeBenchmark(const CSRWGraph *g_)
  * Returns:
  *   list of benchmark results (layer_res_t) ordered by increasing depth.
  */
-tree_res_t TreeBenchmark::tree_microbenchmark(const int depth) {
+template <typename GraphT>
+tree_res_t TreeBenchmark<GraphT>::tree_microbenchmark(const int depth) {
     tree_res_t results;
     results.num_layers = depth + 1;
     results.layers     = new layer_res_t[depth + 1]; // 2^0, ... , 2^{depth}.
@@ -228,7 +260,8 @@ tree_res_t TreeBenchmark::tree_microbenchmark(const int depth) {
  * Returns:
  *   results of benchmark for a particular layer.
  */
-layer_res_t TreeBenchmark::layer_microbenchmark(const nid_t num_segments) {
+template <typename GraphT>
+layer_res_t TreeBenchmark<GraphT>::layer_microbenchmark(const nid_t num_segments) {
     // Init results.
     layer_res_t results;
     results.num_segments = num_segments;
@@ -248,8 +281,9 @@ layer_res_t TreeBenchmark::layer_microbenchmark(const nid_t num_segments) {
 /**
  * Wrapper for compute_equal_edge_ranges.
  */
+template <typename GraphT>
 __inline__
-nid_t *TreeBenchmark::compute_ranges(const nid_t num_segments) const {
+nid_t *TreeBenchmark<GraphT>::compute_ranges(const nid_t num_segments) const {
     return compute_equal_edge_ranges(*g, num_segments);
 }
 
@@ -274,6 +308,110 @@ SSSPTreeBenchmark::SSSPTreeBenchmark(const CSRWGraph *g_)
 
         init_dist[i] = dist(gen);          
     }
+}
+
+BFSTreeBenchmark::BFSTreeBenchmark(const CSRUWGraph *g_)
+    : TreeBenchmark(g_)
+    , cur_epoch(0)
+{
+    // Run BFS CPU pull to get expected parents and frontier bitmap.
+    SourcePicker<CSRUWGraph> sp(g);
+    nid_t source_id = sp.next_vertex();
+
+    nid_t *parents = new nid_t[g->num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g->num_nodes; i++)
+        parents[i] = INVALID_NODE;
+    parents[source_id] = source_id;
+
+    Bitmap::Bitmap *frontier = Bitmap::constructor(g->num_nodes);
+    Bitmap::set_bit(frontier, source_id);
+
+    Bitmap::Bitmap *next_frontier = Bitmap::constructor(g->num_nodes);
+
+    nid_t num_nodes;
+
+    do {
+        // Update parents and frontier arrays.
+        nid_t *cpy_parents = new nid_t[g->num_nodes];
+        std::copy(parents, parents + g->num_nodes, cpy_parents);
+        parents_arr.push_back(cpy_parents);
+
+        Bitmap::Bitmap *cpy_frontier = Bitmap::constructor(g->num_nodes);
+        Bitmap::copy(frontier, cpy_frontier);
+        frontiers.push_back(cpy_frontier);
+
+        // Run BFS pull as normal.
+        num_nodes = 0;
+        epoch_bfs_pull_one_to_one(*g, parents, 0, g->num_nodes, frontier,
+                next_frontier, num_nodes);
+        std::swap(frontier, next_frontier);
+        Bitmap::reset(next_frontier);
+    } while(num_nodes != 0);
+
+    // Free memory.
+    delete[] parents;
+    Bitmap::destructor(&frontier);
+    Bitmap::destructor(&next_frontier);
+}
+
+BFSTreeBenchmark::~BFSTreeBenchmark() {
+    for (int i = 0; i < parents_arr.size(); i++) {
+        delete[] parents_arr[i];
+        Bitmap::destructor(&frontiers[i]);
+    }
+}
+
+/**
+ * Set current BFS epoch to benchmark.
+ * Parameters:
+ *   - epoch <- epoch to set.
+ * Returns:
+ *   true if successful; false if otherwise.
+ */
+bool BFSTreeBenchmark::set_epoch(nid_t epoch) {
+    if (epoch < 0 or epoch >= num_epochs())
+        return false;
+    
+    cur_epoch = epoch;
+    return true;
+}
+
+/**
+ * Get current BFS epoch that's being benchmarked.
+ * Returns:
+ *   Current BFS epoch.
+ */
+nid_t BFSTreeBenchmark::get_epoch() const {
+    return cur_epoch;
+}
+
+/**
+ * Get total number of epochs to benchmark.
+ * Returns:
+ *   Number of epochs available for benchmarking.
+ */
+nid_t BFSTreeBenchmark::num_epochs() const {
+    return parents_arr.size();
+}
+
+__inline__
+nid_t *BFSTreeBenchmark::get_parents() const {
+    return parents_arr[cur_epoch];
+}
+
+__inline__
+Bitmap::Bitmap *BFSTreeBenchmark::get_frontier() const {
+    return frontiers[cur_epoch];
+}
+
+/**
+ * Modify default compute ranges to align range start and end to bitmap's
+ * internal data type size (i.e., num bits).
+ */
+__inline__
+nid_t *BFSTreeBenchmark::compute_ranges(const nid_t num_segments) const {
+    return compute_equal_edge_ranges(*g, num_segments, Bitmap::data_size);
 }
 
 #endif // SRC_BENCHMARKS__BENCHMARK_H

@@ -10,7 +10,7 @@
 #include "../kernel_types.cuh"
 #include "../../bitmap.cuh"
 #include "../../cuda.cuh"
-#include "../../graph.h"
+#include "../../graph.cuh"
 #include "../../util.h"
 
 /*****************************************************************************

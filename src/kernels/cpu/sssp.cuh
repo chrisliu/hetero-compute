@@ -2,8 +2,8 @@
  * CPU implementations of SSSP pull kernels.
  */
 
-#ifndef SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H
-#define SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H
+#ifndef SRC_KERNELS_CPU__KERNEL_SSSP_CUH
+#define SRC_KERNELS_CPU__KERNEL_SSSP_CUH
 
 #include <iostream>
 #include <omp.h>
@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "../kernel_types.cuh"
-#include "../../graph.h"
+#include "../../graph.cuh"
 #include "../../util.h"
 
 /*****************************************************************************
@@ -222,4 +222,4 @@ std::ostream &operator<<(std::ostream &os, SSSPCPU ker) {
     return os;
 }
 
-#endif // SRC_KERNELS_CPU__KERNEL_SSSP_PULL_H
+#endif // SRC_KERNELS_CPU__KERNEL_SSSP_CUH

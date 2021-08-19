@@ -6,7 +6,7 @@
 #define SRC_KERNELS__KERNEL_TYPES_CUH
 
 #include "../bitmap.cuh"
-#include "../graph.h"
+#include "../graph.cuh"
 
 /******************************************************************************
  ***** Data Structures ********************************************************

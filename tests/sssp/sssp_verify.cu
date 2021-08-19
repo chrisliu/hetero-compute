@@ -4,10 +4,10 @@
 // Maximum number of errors to print out.
 #define MAX_PRINT_ERRORS 10
 
-#include "../../src/graph.h"
-#include "../../src/kernels/cpu/sssp_pull.h"
-#include "../../src/kernels/gpu/sssp_pull.cuh"
-#include "../../src/kernels/heterogeneous/sssp_pull.cuh"
+#include "../../src/graph.cuh"
+#include "../../src/kernels/cpu/sssp.cuh"
+#include "../../src/kernels/gpu/sssp.cuh"
+#include "../../src/kernels/heterogeneous/sssp.cuh"
 
 /** Forward decl. */
 bool verify(const weight_t *oracle_dist, const weight_t *dist, 
@@ -63,18 +63,18 @@ int main(int argc, char *argv[]) {
         /*delete[] dist;*/
     /*}*/
 
-    /*// Check SSSP GPU warp min kernel.*/
-    /*{*/
-        /*weight_t *dist = nullptr;*/
-        /*sssp_pull_gpu(g, epoch_sssp_pull_gpu_warp_min, init_dist, &dist);*/
+    // Check SSSP GPU warp min kernel.
+    {
+        weight_t *dist = nullptr;
+        sssp_pull_gpu(g, epoch_sssp_pull_gpu_warp_min, init_dist, &dist);
 
-        /*std::cout << "Verifying SSSP GPU warp min kernel ..." << std::endl;*/
-        /*bool success = verify(oracle_dist, dist, g.num_nodes);*/
-        /*std::cout << " > Verification " << (success ? "succeeded" : "failed")*/
-            /*<< "!" << std::endl;*/
+        std::cout << "Verifying SSSP GPU warp min kernel ..." << std::endl;
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
-        /*delete[] dist;*/
-    /*}*/
+        delete[] dist;
+    }
 
     /*// Check SSSP GPU block min kernel.*/
     /*{*/
@@ -90,18 +90,18 @@ int main(int argc, char *argv[]) {
         /*delete[] dist;*/
     /*}*/
 
-    // Check SSSP heterogeneous kernel.
-    {
-        weight_t *dist = nullptr;
-        sssp_pull_heterogeneous(g, init_dist, &dist);
+    /*// Check SSSP heterogeneous kernel.*/
+    /*{*/
+        /*weight_t *dist = nullptr;*/
+        /*sssp_pull_heterogeneous(g, init_dist, &dist);*/
 
-        std::cout << "Verifying SSSP heterogeneous kernel ..." << std::endl;
-        bool success = verify(oracle_dist, dist, g.num_nodes);
-        std::cout << " > Verification " << (success ? "succeeded" : "failed")
-            << "!" << std::endl;
+        /*std::cout << "Verifying SSSP heterogeneous kernel ..." << std::endl;*/
+        /*bool success = verify(oracle_dist, dist, g.num_nodes);*/
+        /*std::cout << " > Verification " << (success ? "succeeded" : "failed")*/
+            /*<< "!" << std::endl;*/
 
-        delete[] dist;
-    }
+        /*delete[] dist;*/
+    /*}*/
 
     delete[] oracle_dist;
 

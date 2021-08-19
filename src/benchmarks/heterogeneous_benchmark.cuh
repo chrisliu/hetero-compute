@@ -5,8 +5,8 @@
 #ifndef SRC_BENCHMARKS__HETEROGENEOUS_BENCHMARK_CUH
 #define SRC_BENCHMARKS__HETEROGENEOUS_BENCHMARK_CUH
 
-#include "../graph.h"
-#include "../kernels/heterogeneous/sssp_pull.cuh"
+#include "../graph.cuh"
+#include "../kernels/heterogeneous/sssp.cuh"
 
 /**
  * Benchmarks a full SSSP heterogeneous run.

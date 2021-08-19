@@ -8,7 +8,7 @@
 #include <algorithm>
 
 #include "../../bitmap.cuh"
-#include "../../graph.h"
+#include "../../graph.cuh"
 #include "../../util.h"
 #include "../../window.h"
 

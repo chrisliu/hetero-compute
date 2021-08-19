@@ -8,7 +8,7 @@
 #include <iostream>
 #include <string>
 
-#include "../../src/graph.h"
+#include "../../src/graph.cuh"
 #include "../../src/kernels/cpu/bfs.cuh"
 #include "../../src/kernels/gpu/bfs.cuh"
 

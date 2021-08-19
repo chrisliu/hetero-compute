@@ -2,8 +2,8 @@
  * GPU implementations of SSSP pull kernels.
  */
 
-#ifndef SRC_KERNELS_GPU__KERNEL_SSSP_PULL_GPU_CUH
-#define SRC_KERNELS_GPU__KERNEL_SSSP_PULL_GPU_CUH
+#ifndef SRC_KERNELS_GPU__KERNEL_SSSP_CUH
+#define SRC_KERNELS_GPU__KERNEL_SSSP_CUH
 
 #include <iostream>
 #include <omp.h> 
@@ -13,7 +13,7 @@
 #include "../kernel_types.cuh"
 #include "../../cuda.cuh"
 #include "../../devices.h"
-#include "../../graph.h"
+#include "../../graph.cuh"
 #include "../../util.h"
 
 /** Forward decl. */
@@ -355,4 +355,4 @@ std::ostream &operator<<(std::ostream &os, SSSPGPU ker) {
     return os;
 }
 
-#endif // SRC_KERNELS_GPU__KERNEL_SSSP_PULL_GPU_CUH
+#endif // SRC_KERNELS_GPU__KERNEL_SSSP_CUH
