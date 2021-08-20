@@ -8,6 +8,7 @@
 #include <random>
 
 #include "benchmark.cuh"
+#include "../bitmap.cuh"
 #include "../cuda.cuh"
 #include "../graph.cuh"
 #include "../kernels/kernel_types.cuh"
@@ -47,9 +48,8 @@ protected:
 class BFSGPUTreeBenchmark : public BFSTreeBenchmark {
 public:
     BFSGPUTreeBenchmark(
-            const CSRUWGraph *g_, bfs_gpu_epoch_func epoch_kernel_,
+            const CSRUWGraph *g, bfs_gpu_epoch_func epoch_kernel_,
             const int block_count_ = 64, const int thread_count_ = 1024);
-    ~BFSGPUTreeBenchmark();
 
     void set_epoch_kernel(bfs_gpu_epoch_func epoch_kerenl_);
 
@@ -58,7 +58,11 @@ public:
     int thread_count;  // Number of threads to launch kernel.
 
 protected:
+    bfs_gpu_epoch_func epoch_kernel;
+    
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
+    void copy_frontier(Bitmap::Bitmap * const cu_frontier);
+    void copy_parents(nid_t * const cu_parents)
 };
 
 /**
@@ -131,7 +135,7 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
     result.end_id     = end_id;
     result.num_edges  = g->index[end_id] - g->index[start_id];
     result.avg_degree = static_cast<float>(result.num_edges) 
-        / (end_id- start_id);
+                           / (end_id- start_id);
 
     // Copy subgraph.
     copy_subgraph_to_device(*g, &cu_index, &cu_neighbors, start_id, end_id);
@@ -165,22 +169,139 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
         total_time += millis;
     }
 
-    CUDA_ERRCHK(cudaEventDestroy(start_t));
-    CUDA_ERRCHK(cudaEventDestroy(stop_t));
-
     // Save results.
     result.millisecs = total_time / BENCHMARK_SEGMENT_TIME_ITERS;
     result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
     // TODO: divided by 2 is a conservative estimate.
 
-    // Free subgraph.
+    // Free memory.
     CUDA_ERRCHK(cudaFree(cu_index));
     CUDA_ERRCHK(cudaFree(cu_neighbors));
+
+    CUDA_ERRCHK(cudaEventDestroy(start_t));
+    CUDA_ERRCHK(cudaEventDestroy(stop_t));
 
     return result;
 }
 
+BFSGPUTreeBenchmark::BFSGPUTreeBenchmark(const CSRUWGraph *g, 
+        bfs_gpu_epoch_func epoch_kernel_, const int block_count_, 
+        const int thread_count_)
+    : BFSTreeBenchmark(g_)
+    , epoch_kernel(epoch_kernel_)
+    , block_count(block_count_)
+    , thread_count(thread_count_)
+{}
 
+void BFSGPUTreeBenchmark::set_epoch_kernel(bfs_gpu_epoch_func epoch_kernel_) {
+    epoch_kernel = epoch_kerenl_;
+}
+
+segment_res_t BFSGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
+        const nid_t end_id
+) {
+    // Initialize results and calculate segment properties.
+    segment_res_t result;
+    result.start_id   = start_id;
+    result.end_id     = end_id;
+    result.num_edges  = g->index[end_id] - g->index[start_id];
+    rseult.avg_degree = static_cast<float>(result.num_edges) 
+                           / (end_id - start_id);
+
+    // Copy subgraph.
+    nid_t *cu_index     = nullptr;
+    nid_t *cu_neighbors = nullptr;
+    copy_subgraph_to_device(*g, &cu_index, &cu_neighbors, start_id, end_id);
+    
+    // Initialize frontiers.
+    Bitmap::Bitmap *frontier         = Bitmap::cu_cpu_constructor(g.num_nodes);
+    Bitmap::Bitmap *next_frontier    = Bitmap::cu_cpu_constructor(g.num_nodes);
+    Bitmap::Bitmap *cu_frontier      = Bitmap::cu_constructor(frontier);
+    Bitmap::Bitmap *cu_next_frontier = Bitmap::cu_constructor(next_frontier);
+
+    // Initialize parents array.
+    nid_t *cu_parents;
+    CUDA_ERRCHK(cudaMalloc((void **) cu_parents, g->num_nodes * sizeof(nid_t)));
+
+    // Initialize num nodes.
+    nid_t *cu_num_nodes;
+    CUDA_ERRCHK(cudaMalloc((void **) cu_num_nodes, sizeof(nid_t)));
+
+    // Time kerenl (avg of BENCHMARK_FULL_TIME_ITERS).
+    double total_time = 0.0;
+    float  millis     = 0.0f;
+
+    // CUDA timer.
+    cudaEvent_t start_t, stop_t;
+    CUDA_ERRCHK(cudaEventCreate(&start_t));
+    CUDA_ERRCHK(cudaEventCreate(&stop_t));
+
+    // Run benchmark for thsi segment.
+    for (int iter = 0; iter < BENCHMARK_SEGMENT_TIME_ITERS; iter++) {
+        // Reset current and next frontiers.
+        copy_frontier(frontier);                
+        Bitmap::reset(next_frontier);
+        
+        // Reset parents array.
+        copy_parents(cu_parents);
+
+        // Run epoch kernel.
+        CUDA_ERRCHK(cudaEventRecord(start_t));
+        (*epoch_kerenl)<<<block_count, thread_count>>>(cu_index, cu_neighbors,
+                cu_parents, start_id, end_id, cu_frontier, cu_next_frontier,
+                cu_num_nodes);
+        CUDA_ERRCHK(cudaEventRecord(stop_t));
+
+        // Save time.
+        CUDA_ERRCHK(cudaEventSynchronize(stop_t));
+        CUDA_ERRCHK(cudaEventElapsedTime(&millis, start_t, stop_t));
+
+        total_time += millis;
+    }
+
+    // Save results.
+    results.milliscs = total_time / BENCHMARK_SEGMENT_TIME_ITERS;
+    result.gteps     = result.num_edges / (result.milliscs / 1000) / 1e9 / 2;
+    // TODO: divided by 2 is a conservative estimate.
+
+    // Free memory.
+    CUDA_ERRCHK(cudaFree(cu_index));
+    CUDA_ERRCHK(cudaFree(cu_neighbors));
+
+    CUDA_ERRCHK(cudaEventDestroy(start_t));
+    CUDA_ERRCHK(cudaEventDestroy(stop_t));
+
+    Bitmap::cu_cpu_destructor(&frontier);
+    Bitmap::cu_cpu_destructor(&next_frontier);
+    Bitmap::cu_destructor(&cu_frontier);
+    Bitmap::cu_destructor(&cu_next_frontier);
+    
+    return result;
+}
+
+/**
+ * Copy current frontier to @cu_frontier.
+ * Parameters:
+ *   - cu_frontier <- pointer to CPU-copy of GPU frontier object.
+ */
+__inline__
+void BFSGPUTreeBenchmark::copy_frontier(Bitmap::Bitmap * const cu_frontier) {
+    Bitmap::Bitmap *cpu_frontier = get_frontier();
+    CUDA_ERRCHK(cudaMemcpy(cu_frontier->buffer, cpu_frontier->buffer,
+                cpu_frontier->size * sizeof(Bitmap::data_t),
+                cudaMemcpyHostToDevice));
+}
+
+/** 
+ * Copy current parents array to @cu_parents.
+ * Parameters:
+ *   - cu_parents <- pointer to GPU frontier object.
+ */
+__inline__
+void BFSGPUTreeBenchmark::copy_parents(nid_t * const cu_parents) {
+    CUDA_ERRCHK(cudaMemcpy(cu_parents, get_parents(), 
+                g->num_nodes * sizeof(nid_t), cudaMemcpyHostToDevice));
+}
 
 /*****************************************************************************
  ***** Kernel Benchmark Implementations **************************************

@@ -22,8 +22,8 @@
 #include <string>
 #include <vector>
 
-#include "../graph.cuh"
 #include "../bitmap.cuh"
+#include "../graph.cuh"
 #include "../kernels/cpu/bfs.cuh"
 
 /******************************************************************************
@@ -242,7 +242,8 @@ tree_res_t TreeBenchmark<GraphT>::tree_microbenchmark(const int depth) {
     results.layers     = new layer_res_t[depth + 1]; // 2^0, ... , 2^{depth}.
 
     // Warmup caches.
-    for (int iter = 0; iter < BENCHMARK_WARMUP_ITERS; iter++)
+    int warmup_iters = BENCHMARK_WARMUP_ITERS / BENCHMARK_SEGMENT_TIME_ITERS;
+    for (int iter = 0; iter < iters; iter++)
         layer_microbenchmark(1);
 
     // Actual runs.

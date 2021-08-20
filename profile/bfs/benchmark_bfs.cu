@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "../../src/graph.h"
+#include "../../src/graph.cuh"
 #include "../../src/util.h"
 #include "../../src/benchmarks/cpu_benchmark.cuh"
 #include "../../src/benchmarks/heterogeneous_benchmark.cuh"
@@ -111,8 +111,8 @@ std::string get_kernel_name(IdT ker, OptArgsT ...args) {
  */
 template <class BenchmarkT, typename IdT, typename ...OptArgsT,
          typename = typename std::enable_if<
-            std::is_base_of<TreeBenchmark, BenchmarkT>::value>>
-void run_treebenchmark(CSRWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
+            std::is_base_of<TreeBenchmark<CSRUWGraph>, BenchmarkT>::value>>
+void run_treebenchmark(CSRUWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
     // Run benchmark.
     // TOOD: this is a hacky way to pass arguments into the benchmark function.
     BenchmarkT bench(&g, get_kernel(ker), args...);
