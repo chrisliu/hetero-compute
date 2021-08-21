@@ -134,7 +134,7 @@ protected:
     nid_t          *get_parents() const;
     Bitmap::Bitmap *get_frontier() const;
 
-    virtual nid_t *compute_ranges(const nid_t num_segments) const;
+    nid_t *compute_ranges(const nid_t num_segments) const override;
 };
 
 /******************************************************************************
@@ -243,7 +243,7 @@ tree_res_t TreeBenchmark<GraphT>::tree_microbenchmark(const int depth) {
 
     // Warmup caches.
     int warmup_iters = BENCHMARK_WARMUP_ITERS / BENCHMARK_SEGMENT_TIME_ITERS;
-    for (int iter = 0; iter < iters; iter++)
+    for (int iter = 0; iter < warmup_iters; iter++)
         layer_microbenchmark(1);
 
     // Actual runs.
@@ -270,9 +270,13 @@ layer_res_t TreeBenchmark<GraphT>::layer_microbenchmark(const nid_t num_segments
 
     nid_t *seg_ranges = compute_ranges(num_segments);
 
-    for (int s = 0; s < num_segments; s++)
+    for (int s = 0; s < num_segments; s++) {
         results.segments[s] = benchmark_segment(seg_ranges[s], 
                 seg_ranges[s + 1]);        
+    }
+    /*for (int s = 0; s < num_segments; s++)*/
+        /*results.segments[s] = benchmark_segment(seg_ranges[s], */
+                /*seg_ranges[s + 1]);        */
 
     delete[] seg_ranges;
 

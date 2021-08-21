@@ -4,9 +4,9 @@
 #include <iostream>
 #include <string>
 
-#include "../../src/graph.h"
+#include "../../src/graph.cuh"
 #include "../../src/util.h"
-#include "../../src/gapbs/gapbs.h"
+#include "../../src/gapbs/gapbs.cuh"
 
 const std::string wgraph_fname = "graph.wsg";
 const std::string uwgraph_fname = "graph.sg";
@@ -16,7 +16,7 @@ int main() {
     char *argv[] = {
        (char *) "graphio",
        (char *) "-g",
-       (char *) "16",
+       (char *) "23",
        (char *) "-k", 
        (char *) "16",
        NULL

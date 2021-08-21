@@ -1,5 +1,5 @@
 CPP_COMPILER    = nvcc
-CPP_FLAGS       = -O2 --std=c++11 -g
+CPP_FLAGS       = -O2 --std=c++11 -g -lineinfo
 CROSS_CPP_FLAGS = -fopenmp 
 CXX             = $(CPP_COMPILER) $(CPP_FLAGS) $(addprefix -Xcompiler , ${CROSS_CPP_FLAGS})
 
@@ -11,7 +11,7 @@ benchmark_bfs.exe: benchmark_bfs.cu
 
 .HONY: test
 test: benchmark_bfs.exe
-	./benchmark_bfs.exe ../../graphs/graph_scale23_degree16.wsg 
+	./benchmark_bfs.exe ../../graphs/graph_scale23_degree16.sg 
 
 .PHONY: clean
 clean:

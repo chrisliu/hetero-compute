@@ -187,8 +187,8 @@ nid_t *compute_equal_edge_ranges(const GraphT &g, const nid_t num_segments,
     // Align segments to chunk size.
     for (int i = 1; i < num_segments; i++) {
         nid_t diff = seg_ranges[i] % chunk_size;
-        if (diff != 0) {
 
+        if (diff != 0) {
             // Align to closest mark.
             if (diff < chunk_size / 2)
                 seg_ranges[i] = seg_ranges[i] / chunk_size * chunk_size;

@@ -129,7 +129,8 @@ void epoch_bfs_pull_gpu_one_to_one(
     for (nid_t u = start_id + tid; u < end_id; u += num_threads) {
         // If current node hasn't been explored yet.
         if (parents[u] == INVALID_NODE) {
-            for (offset_t i = index[u]; i < index[u + 1]; i++) {
+            nid_t index_id = u - start_id;
+            for (offset_t i = index[index_id]; i < index[index_id + 1]; i++) {
                 nid_t nei = neighbors[i];
                 // If parent has been explored.
                 if (Bitmap::get_bit(frontier, nei)) {

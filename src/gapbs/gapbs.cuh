@@ -2,13 +2,13 @@
  * GAPBS header and helper functions. 
  */
 
-#ifndef SRC_GAPBS__GAPBS_H
-#define SRC_GAPBS__GAPBS_H
+#ifndef SRC_GAPBS__GAPBS_CUH
+#define SRC_GAPBS__GAPBS_CUH
 
 #include <ostream>
 
 // Custom CSR graph (for types).
-#include "../graph.h"
+#include "../graph.cuh"
 
 // Modified implementations of GAPBS.
 #include "builder.h" 
@@ -124,4 +124,4 @@ GapbsWGraph make_wgraph(CLBase &cli) {
     return b.RelabelByDegree(g);
 }
 
-#endif // SRC_GAPBS__GAPBS_H
+#endif // SRC_GAPBS__GAPBS_CUH

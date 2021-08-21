@@ -26,13 +26,13 @@
 // Save results to YAML files.
 #define SAVE_RESULTS
 // Run epoch kernels.
-/*#define RUN_EPOCH_KERNELS*/
+#define RUN_EPOCH_KERNELS
 // Run full kernels.
-#define RUN_FULL_KERNELS
+/*#define RUN_FULL_KERNELS*/
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
-#define SEGMENTS 24
+#define SEGMENTS 4
 #else
 // Current/Up to (inclusive) this depth.
 #define DEPTH 6
@@ -159,7 +159,43 @@ int main(int argc, char *argv[]) {
 
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
-/*#ifdef RUN_EPOCH_KERNELS*/
+#ifdef RUN_EPOCH_KERNELS
+    {
+        BFSGPUTreeBenchmark bench(&g, epoch_bfs_pull_gpu_one_to_one);
+
+        for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
+            bench.set_epoch(epoch);
+            auto res = bench.layer_microbenchmark(SEGMENTS);
+            std::cout << "Epoch " << epoch << "-----------------------------"
+                << std::endl;
+            std::cout << res;
+        }
+    }
+
+    {
+        BFSGPUTreeBenchmark bench(&g, epoch_bfs_sync_pull_gpu_warp<1>);
+
+        for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
+            bench.set_epoch(epoch);
+            auto res = bench.layer_microbenchmark(SEGMENTS);
+            std::cout << "Epoch " << epoch << "-----------------------------"
+                << std::endl;
+            std::cout << res;
+        }
+    }
+
+    {
+        BFSGPUTreeBenchmark bench(&g, epoch_bfs_sync_pull_gpu_warp<2>);
+
+        for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
+            bench.set_epoch(epoch);
+            auto res = bench.layer_microbenchmark(SEGMENTS);
+            std::cout << "Epoch " << epoch << "-----------------------------"
+                << std::endl;
+            std::cout << res;
+        }
+    }
+
     /*// Run CPU benchmarks.*/
     /*run_treebenchmark<SSSPCPUTreeBenchmark>(g, DEVCPU,*/
             /*SSSPCPU::one_to_one);*/
@@ -175,7 +211,7 @@ int main(int argc, char *argv[]) {
         /*run_treebenchmark<SSSPGPUTreeBenchmark>(g,*/
                 /*DEVGPU, SSSPGPU::block_min,*/
                 /*NUM_BLOCKS * (1024 / thread_count), thread_count);*/
-/*#endif // RUN_EPOCH_KERNELS*/
+#endif // RUN_EPOCH_KERNELS
 
     /*enable_all_peer_access();*/
 
@@ -183,29 +219,29 @@ int main(int argc, char *argv[]) {
 #ifdef RUN_FULL_KERNELS
     SourcePicker<CSRUWGraph> sp(&g);
 
-    /*// Run CPU push kernel.*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "BFS CPU push:" << std::endl;*/
-        /*segment_res_t res = benchmark_bfs_cpu(g, bfs_push_cpu, sp);*/
-        /*std::cout << res;*/
-    /*}*/
+    // Run CPU push kernel.
+    sp.reset();
+    {
+        std::cout << "BFS CPU push:" << std::endl;
+        segment_res_t res = benchmark_bfs_cpu(g, bfs_push_cpu, sp);
+        std::cout << res;
+    }
 
-    /*// Run CPU pull kernel.*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "BFS CPU pull:" << std::endl;*/
-        /*segment_res_t res = benchmark_bfs_cpu(g, bfs_pull_cpu, sp);*/
-        /*std::cout << res;*/
-    /*}*/
+    // Run CPU pull kernel.
+    sp.reset();
+    {
+        std::cout << "BFS CPU pull:" << std::endl;
+        segment_res_t res = benchmark_bfs_cpu(g, bfs_pull_cpu, sp);
+        std::cout << res;
+    }
 
-    /*// Run CPU DO kernel.*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "BFS CPU DO:" << std::endl;*/
-        /*segment_res_t res = benchmark_bfs_cpu(g, bfs_do_cpu, sp);*/
-        /*std::cout << res;*/
-    /*}*/
+    // Run CPU DO kernel.
+    sp.reset();
+    {
+        std::cout << "BFS CPU DO:" << std::endl;
+        segment_res_t res = benchmark_bfs_cpu(g, bfs_do_cpu, sp);
+        std::cout << res;
+    }
 
     // Run GPU one-to-one kernel.
     sp.reset();

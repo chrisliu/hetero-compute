@@ -62,7 +62,7 @@ protected:
     
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
     void copy_frontier(Bitmap::Bitmap * const cu_frontier);
-    void copy_parents(nid_t * const cu_parents)
+    void copy_parents(nid_t * const cu_parents);
 };
 
 /**
@@ -187,14 +187,14 @@ segment_res_t SSSPGPUTreeBenchmark::benchmark_segment(
 BFSGPUTreeBenchmark::BFSGPUTreeBenchmark(const CSRUWGraph *g, 
         bfs_gpu_epoch_func epoch_kernel_, const int block_count_, 
         const int thread_count_)
-    : BFSTreeBenchmark(g_)
+    : BFSTreeBenchmark(g)
     , epoch_kernel(epoch_kernel_)
     , block_count(block_count_)
     , thread_count(thread_count_)
 {}
 
 void BFSGPUTreeBenchmark::set_epoch_kernel(bfs_gpu_epoch_func epoch_kernel_) {
-    epoch_kernel = epoch_kerenl_;
+    epoch_kernel = epoch_kernel_;
 }
 
 segment_res_t BFSGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
@@ -205,27 +205,27 @@ segment_res_t BFSGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
     result.start_id   = start_id;
     result.end_id     = end_id;
     result.num_edges  = g->index[end_id] - g->index[start_id];
-    rseult.avg_degree = static_cast<float>(result.num_edges) 
+    result.avg_degree = static_cast<float>(result.num_edges) 
                            / (end_id - start_id);
 
     // Copy subgraph.
-    nid_t *cu_index     = nullptr;
-    nid_t *cu_neighbors = nullptr;
+    offset_t *cu_index     = nullptr;
+    nid_t    *cu_neighbors = nullptr;
     copy_subgraph_to_device(*g, &cu_index, &cu_neighbors, start_id, end_id);
     
     // Initialize frontiers.
-    Bitmap::Bitmap *frontier         = Bitmap::cu_cpu_constructor(g.num_nodes);
-    Bitmap::Bitmap *next_frontier    = Bitmap::cu_cpu_constructor(g.num_nodes);
+    Bitmap::Bitmap *frontier         = Bitmap::cu_cpu_constructor(g->num_nodes);
+    Bitmap::Bitmap *next_frontier    = Bitmap::cu_cpu_constructor(g->num_nodes);
     Bitmap::Bitmap *cu_frontier      = Bitmap::cu_constructor(frontier);
     Bitmap::Bitmap *cu_next_frontier = Bitmap::cu_constructor(next_frontier);
 
     // Initialize parents array.
-    nid_t *cu_parents;
-    CUDA_ERRCHK(cudaMalloc((void **) cu_parents, g->num_nodes * sizeof(nid_t)));
+    nid_t *cu_parents = nullptr;
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_parents, g->num_nodes * sizeof(nid_t)));
 
     // Initialize num nodes.
-    nid_t *cu_num_nodes;
-    CUDA_ERRCHK(cudaMalloc((void **) cu_num_nodes, sizeof(nid_t)));
+    nid_t *cu_num_nodes = nullptr;
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_num_nodes, sizeof(nid_t)));
 
     // Time kerenl (avg of BENCHMARK_FULL_TIME_ITERS).
     double total_time = 0.0;
@@ -236,18 +236,19 @@ segment_res_t BFSGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
     CUDA_ERRCHK(cudaEventCreate(&start_t));
     CUDA_ERRCHK(cudaEventCreate(&stop_t));
 
+
     // Run benchmark for thsi segment.
     for (int iter = 0; iter < BENCHMARK_SEGMENT_TIME_ITERS; iter++) {
         // Reset current and next frontiers.
         copy_frontier(frontier);                
-        Bitmap::reset(next_frontier);
+        Bitmap::cu_cpu_reset(next_frontier);
         
         // Reset parents array.
         copy_parents(cu_parents);
 
         // Run epoch kernel.
         CUDA_ERRCHK(cudaEventRecord(start_t));
-        (*epoch_kerenl)<<<block_count, thread_count>>>(cu_index, cu_neighbors,
+        (*epoch_kernel)<<<block_count, thread_count>>>(cu_index, cu_neighbors,
                 cu_parents, start_id, end_id, cu_frontier, cu_next_frontier,
                 cu_num_nodes);
         CUDA_ERRCHK(cudaEventRecord(stop_t));
@@ -260,8 +261,8 @@ segment_res_t BFSGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
     }
 
     // Save results.
-    results.milliscs = total_time / BENCHMARK_SEGMENT_TIME_ITERS;
-    result.gteps     = result.num_edges / (result.milliscs / 1000) / 1e9 / 2;
+    result.millisecs = total_time / BENCHMARK_SEGMENT_TIME_ITERS;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
     // TODO: divided by 2 is a conservative estimate.
 
     // Free memory.

@@ -208,12 +208,12 @@ void epoch_bfs_push_one_to_one(
         const CSRUWGraph &g, nid_t * const parents,
         SlidingWindow<nid_t> &frontier, nid_t &num_edges
 ) {
-    /*#pragma omp parallel */
+    #pragma omp parallel
     {
         LocalWindow<nid_t> local_frontier(frontier);
         nid_t local_num_edges = 0;
     
-        /*#pragma omp for nowait*/
+        #pragma omp for nowait
         for (const nid_t nid : frontier) {
             for (nid_t nei : g.get_neighbors(nid)) {
                 nid_t cur_parent = parents[nei];
@@ -233,7 +233,7 @@ void epoch_bfs_push_one_to_one(
         local_frontier.flush();
 
         // Push update count.
-        /*#pragma omp atomic*/
+        #pragma omp atomic
         num_edges += local_num_edges;
     }
 }
