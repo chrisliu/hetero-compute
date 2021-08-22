@@ -32,7 +32,7 @@
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
-#define SEGMENTS 4
+#define NUM_SEGMENTS 4
 #else
 // Current/Up to (inclusive) this depth.
 #define DEPTH 6
@@ -118,7 +118,7 @@ void run_treebenchmark(CSRUWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
     BenchmarkT bench(&g, get_kernel(ker), args...);
 
 #ifdef ONLY_LAYER
-    auto res = bench.layer_microbenchmark(SEGMENTS);
+    auto res = bench.layer_microbenchmark(NUM_SEGMENTS);
 #else 
     auto res = bench.tree_microbenchmark(DEPTH);
 #endif  // ONLY_LAYER
@@ -161,11 +161,11 @@ int main(int argc, char *argv[]) {
 
 #ifdef RUN_EPOCH_KERNELS
     {
-        BFSGPUTreeBenchmark bench(&g, epoch_bfs_pull_gpu_one_to_one);
+        BFSCPUPushTreeBenchmark bench(&g);
 
         for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
             bench.set_epoch(epoch);
-            auto res = bench.layer_microbenchmark(SEGMENTS);
+            auto res = bench.layer_microbenchmark(1);
             std::cout << "Epoch " << epoch << "-----------------------------"
                 << std::endl;
             std::cout << res;
@@ -173,44 +173,52 @@ int main(int argc, char *argv[]) {
     }
 
     {
-        BFSGPUTreeBenchmark bench(&g, epoch_bfs_sync_pull_gpu_warp<1>);
-
+        BFSCPUPullTreeBenchmark bench(&g);
+        
         for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
             bench.set_epoch(epoch);
-            auto res = bench.layer_microbenchmark(SEGMENTS);
+            auto res = bench.layer_microbenchmark(NUM_SEGMENTS);
             std::cout << "Epoch " << epoch << "-----------------------------"
                 << std::endl;
             std::cout << res;
         }
     }
 
-    {
-        BFSGPUTreeBenchmark bench(&g, epoch_bfs_sync_pull_gpu_warp<2>);
+    /*{*/
+        /*BFSGPUTreeBenchmark bench(&g, epoch_bfs_pull_gpu_one_to_one);*/
 
-        for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
-            bench.set_epoch(epoch);
-            auto res = bench.layer_microbenchmark(SEGMENTS);
-            std::cout << "Epoch " << epoch << "-----------------------------"
-                << std::endl;
-            std::cout << res;
-        }
-    }
+        /*for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {*/
+            /*bench.set_epoch(epoch);*/
+            /*auto res = bench.layer_microbenchmark(NUM_SEGMENTS);*/
+            /*std::cout << "Epoch " << epoch << "-----------------------------"*/
+                /*<< std::endl;*/
+            /*std::cout << res;*/
+        /*}*/
+    /*}*/
 
-    /*// Run CPU benchmarks.*/
-    /*run_treebenchmark<SSSPCPUTreeBenchmark>(g, DEVCPU,*/
-            /*SSSPCPU::one_to_one);*/
+    /*{*/
+        /*BFSGPUTreeBenchmark bench(&g, epoch_bfs_sync_pull_gpu_warp<1>);*/
 
-    /*// Run GPU benchmarks.*/
-    /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,*/
-            /*SSSPGPU::one_to_one, NUM_BLOCKS, 1024);*/
-    /*run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,*/
-            /*SSSPGPU::warp_min, NUM_BLOCKS, 1024);*/
+        /*for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {*/
+            /*bench.set_epoch(epoch);*/
+            /*auto res = bench.layer_microbenchmark(NUM_SEGMENTS);*/
+            /*std::cout << "Epoch " << epoch << "-----------------------------"*/
+                /*<< std::endl;*/
+            /*std::cout << res;*/
+        /*}*/
+    /*}*/
 
-    /*std::vector<int> thread_counts = {64, 128, 256, 512, 1024};*/
-    /*for (int thread_count : thread_counts)*/
-        /*run_treebenchmark<SSSPGPUTreeBenchmark>(g,*/
-                /*DEVGPU, SSSPGPU::block_min,*/
-                /*NUM_BLOCKS * (1024 / thread_count), thread_count);*/
+    /*{*/
+        /*BFSGPUTreeBenchmark bench(&g, epoch_bfs_sync_pull_gpu_warp<2>);*/
+
+        /*for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {*/
+            /*bench.set_epoch(epoch);*/
+            /*auto res = bench.layer_microbenchmark(NUM_SEGMENTS);*/
+            /*std::cout << "Epoch " << epoch << "-----------------------------"*/
+                /*<< std::endl;*/
+            /*std::cout << res;*/
+        /*}*/
+    /*}*/
 #endif // RUN_EPOCH_KERNELS
 
     /*enable_all_peer_access();*/

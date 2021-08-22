@@ -3,8 +3,8 @@
  * Implementation follows Scott Beamer's GAPBS bitmap class.
  */
 
-#ifndef SRC__BITMAP_H
-#define SRC__BITMAP_H
+#ifndef SRC__BITMAP_CUH
+#define SRC__BITMAP_CUH
 
 #include <algorithm>
 #include <cstddef>
@@ -190,4 +190,4 @@ void cu_set_bit_atomic(Bitmap * const cu_bitmap, const std::size_t idx) {
 
 }
 
-#endif // SRC__BITMAP_H
+#endif // SRC__BITMAP_CUH

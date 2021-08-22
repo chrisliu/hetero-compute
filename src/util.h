@@ -9,6 +9,9 @@
 #include <iostream>
 #include <type_traits>
 
+/** Timer */
+#include "../deps/gapbs/src/timer.h"
+
 /** Condition check. */
 #define CONDCHK( cond, msg ) {\
     if (cond) {\
@@ -18,8 +21,7 @@
     }\
 }
 
-/** Timer */
-#include "../deps/gapbs/src/timer.h"
+#define UNUSED __attribute__((unused))
 
 /** Type traits. */
 
@@ -38,6 +40,5 @@ template <typename, template <typename, typename...> typename>
 struct is_templated_instance : public std::false_type {};
 template <typename...Ts, template <typename, typename...> typename U>
 struct is_templated_instance<U<Ts...>, U> : public std::true_type {};
-
 
 #endif // SRC__UTIL_H

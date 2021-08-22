@@ -5,12 +5,15 @@
 #ifndef SRC_BENCHMARKS__CPU_BENCHMARK_CUH
 #define SRC_BENCHMARKS__CPU_BENCHMARK_CUH
 
+#include <algorithm>
+#include <iostream>
 #include <omp.h>
 
 #include "benchmark.cuh"
 #include "../graph.cuh"
 #include "../util.h"
 #include "../kernels/kernel_types.cuh"
+#include "../kernels/cpu/bfs.cuh"
 #include "../kernels/cpu/sssp.cuh"
 
 /*****************************************************************************
@@ -25,6 +28,25 @@ public:
 protected:
     sssp_cpu_epoch_func epoch_kernel; // CPU epoch kernel.
 
+    segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
+};
+
+class BFSCPUPushTreeBenchmark : public BFSTreeBenchmark {
+public:
+    BFSCPUPushTreeBenchmark(const CSRUWGraph *g);
+    tree_res_t tree_microbenchmark(const int depth) override;
+    layer_res_t layer_microbenchmark(const nid_t num_segments) override;
+
+protected:
+    segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
+};
+
+
+class BFSCPUPullTreeBenchmark : public BFSTreeBenchmark {
+public:
+    BFSCPUPullTreeBenchmark(const CSRUWGraph *g);
+
+protected:
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
 };
 
@@ -97,45 +119,134 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(
     return result;
 }
 
-/*****************************************************************************
- ***** Kernel Benchmark Implementations **************************************
- *****************************************************************************/
+BFSCPUPushTreeBenchmark::BFSCPUPushTreeBenchmark(const CSRUWGraph *g)
+    : BFSTreeBenchmark(g)
+{}
 
-segment_res_t benchmark_sssp_cpu(
-        const CSRWGraph &g, sssp_cpu_epoch_func epoch_kernel,
-        SourcePicker<CSRWGraph> &sp
+tree_res_t BFSCPUPushTreeBenchmark::tree_microbenchmark(const int depth) {
+    if (depth != 0)
+        std::cerr << "[Warning] BFS CPU push cannot be divided into segments. "
+            << "Depth can only be 0, not " << depth << "." << std::endl;
+    
+    tree_res_t results;
+    results.num_layers = 1;
+    results.layers = new layer_res_t[1];
+
+    // Warmup caches.
+    int warmup_iters = BENCHMARK_WARMUP_ITERS / BENCHMARK_SEGMENT_TIME_ITERS;
+    for (int iter = 0; iter < warmup_iters; iter++)
+        layer_microbenchmark(1);
+
+    // Actual runs.
+    results.layers[0] = layer_microbenchmark(1);
+
+    return results;
+}
+
+layer_res_t BFSCPUPushTreeBenchmark::layer_microbenchmark(
+        const nid_t num_segments
 ) {
-    // Initialize results and calculate segment properties.
+    if (num_segments != 1)
+        std::cerr << "[Warning] BFS CPU push cannot be divided into segments. "
+            << "Num segments can only be 1, not " << num_segments
+            << "." << std::endl;
+    
+    layer_res_t results;
+    results.num_segments = 1;
+    results.segments     = new segment_res_t[1];
+
+    results.segments[0] = benchmark_segment(0, g->num_nodes);
+
+    return results;
+}
+
+segment_res_t BFSCPUPushTreeBenchmark::benchmark_segment(
+        UNUSED const nid_t start_id, UNUSED const nid_t end_id
+) {
     segment_res_t result;
     result.start_id   = 0;
-    result.end_id     = g.num_nodes;
-    result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
-    result.num_edges  = g.num_edges;
+    result.end_id     = g->num_nodes;
+    result.num_edges  = g->num_edges;
+    result.avg_degree = static_cast<float>(result.num_edges) / g->num_nodes;
 
-    // Define initial and return distances.
-    weight_t *init_dist = new weight_t[g.num_nodes];
-    #pragma omp parallel for
-    for (int i = 0; i < g.num_nodes; i++)
-        init_dist[i] = INF_WEIGHT;
-    weight_t *ret_dist = nullptr;
+    SlidingWindow<nid_t> frontier(g->num_nodes);
+    nid_t *parents = new nid_t[g->num_nodes];
+    nid_t num_edges;
 
-    // Run kernel!
-    nid_t previous_source = 0;
+    Timer timer;
     double total_time = 0.0;
-    for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
-        nid_t cur_source = sp.next_vertex();
-        init_dist[previous_source] = INF_WEIGHT;
-        init_dist[cur_source]      = 0;
-        previous_source = cur_source;
 
-        total_time += sssp_pull_cpu(g, epoch_kernel, init_dist, &ret_dist);
-        delete[] ret_dist;
+    for (int iter = 0; iter < BENCHMARK_SEGMENT_TIME_ITERS; iter++) {
+        // Setup froniter  and parents.
+        frontier.reset();
+        conv_bitmap_to_window(get_frontier(), frontier, g->num_nodes);                
+        std::copy(get_parents(), get_parents() + g->num_nodes, parents);
+        num_edges = 0;
+
+        // Run kernel.
+        timer.Start();
+        epoch_bfs_push_cpu_one_to_one(*g, parents, frontier, num_edges);
+        timer.Stop();
+
+        frontier.slide_window();
+        total_time += timer.Millisecs();
     }
 
     // Save results.
-    result.millisecs = total_time / BENCHMARK_FULL_TIME_ITERS;
+    result.millisecs = total_time / BENCHMARK_SEGMENT_TIME_ITERS;
     result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
-    // TODO: divided by 2 is a conservative estimate.
+
+    // Free memory.
+    delete[] parents;
+
+    return result;
+}
+
+BFSCPUPullTreeBenchmark::BFSCPUPullTreeBenchmark(const CSRUWGraph *g)
+    : BFSTreeBenchmark(g)
+{}
+
+segment_res_t BFSCPUPullTreeBenchmark::benchmark_segment(
+        const nid_t start_id, const nid_t end_id
+) {
+    segment_res_t result;
+    result.start_id   = start_id;
+    result.end_id     = end_id;
+    result.num_edges  = g->index[end_id] - g->index[start_id];
+    result.avg_degree = static_cast<float>(result.num_edges) / g->num_nodes;
+
+    Bitmap::Bitmap *frontier      = Bitmap::constructor(g->num_nodes);
+    Bitmap::Bitmap *next_frontier = Bitmap::constructor(g->num_nodes);
+    nid_t          *parents       = new nid_t[g->num_nodes];
+    nid_t          num_nodes      = 0;
+
+    Timer timer;
+    double total_time = 0.0;
+
+    for (int iter = 0; iter < BENCHMARK_SEGMENT_TIME_ITERS; iter++) {
+        // Setup frontier and parents.
+        Bitmap::copy(get_frontier(), frontier);
+        Bitmap::reset(next_frontier);
+        std::copy(get_parents(), get_parents() + g->num_nodes, parents);
+        num_nodes = 0;
+
+        // Run kernel.
+        timer.Start();
+        epoch_bfs_pull_cpu_one_to_one(*g, parents, start_id, end_id,
+                frontier, next_frontier, num_nodes);
+        timer.Stop();
+
+        total_time += timer.Millisecs();
+    }
+
+    //Save results.
+    result.millisecs = total_time / BENCHMARK_SEGMENT_TIME_ITERS;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
+    
+    // Free memory.
+    Bitmap::destructor(&frontier);
+    Bitmap::destructor(&next_frontier);
+    delete[] parents;
 
     return result;
 }

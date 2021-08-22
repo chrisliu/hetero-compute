@@ -86,8 +86,8 @@ template <typename GraphT>
 class TreeBenchmark {
 public:
     TreeBenchmark(const GraphT *g_);
-    tree_res_t  tree_microbenchmark(const int depth);
-    layer_res_t layer_microbenchmark(const nid_t num_segments);
+    virtual tree_res_t  tree_microbenchmark(const int depth);
+    virtual layer_res_t layer_microbenchmark(const nid_t num_segments);
 
 protected:
     const GraphT *g; // CPU graph.
@@ -263,20 +263,15 @@ tree_res_t TreeBenchmark<GraphT>::tree_microbenchmark(const int depth) {
  */
 template <typename GraphT>
 layer_res_t TreeBenchmark<GraphT>::layer_microbenchmark(const nid_t num_segments) {
-    // Init results.
     layer_res_t results;
     results.num_segments = num_segments;
     results.segments     = new segment_res_t[num_segments]; 
 
     nid_t *seg_ranges = compute_ranges(num_segments);
 
-    for (int s = 0; s < num_segments; s++) {
+    for (int s = 0; s < num_segments; s++)
         results.segments[s] = benchmark_segment(seg_ranges[s], 
                 seg_ranges[s + 1]);        
-    }
-    /*for (int s = 0; s < num_segments; s++)*/
-        /*results.segments[s] = benchmark_segment(seg_ranges[s], */
-                /*seg_ranges[s + 1]);        */
 
     delete[] seg_ranges;
 
@@ -348,7 +343,7 @@ BFSTreeBenchmark::BFSTreeBenchmark(const CSRUWGraph *g_)
 
         // Run BFS pull as normal.
         num_nodes = 0;
-        epoch_bfs_pull_one_to_one(*g, parents, 0, g->num_nodes, frontier,
+        epoch_bfs_pull_cpu_one_to_one(*g, parents, 0, g->num_nodes, frontier,
                 next_frontier, num_nodes);
         std::swap(frontier, next_frontier);
         Bitmap::reset(next_frontier);

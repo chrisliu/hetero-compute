@@ -13,9 +13,9 @@
 #include "../../window.h"
 
 /** Forward decl. */
-void epoch_bfs_push_one_to_one(const CSRUWGraph &g, nid_t * const parents,
+void epoch_bfs_push_cpu_one_to_one(const CSRUWGraph &g, nid_t * const parents,
         SlidingWindow<nid_t> &frontier, nid_t &num_edges);
-void epoch_bfs_pull_one_to_one(const CSRUWGraph &g, nid_t * const parents,
+void epoch_bfs_pull_cpu_one_to_one(const CSRUWGraph &g, nid_t * const parents,
         const nid_t start_id, const nid_t end_id,
         const Bitmap::Bitmap * const frontier,
         Bitmap::Bitmap * const next_frontier,
@@ -75,7 +75,7 @@ double bfs_do_cpu(
                 prev_num_nodes = num_nodes;
                 num_nodes = 0;
 
-                epoch_bfs_pull_one_to_one(g, parents, 0, g.num_nodes,
+                epoch_bfs_pull_cpu_one_to_one(g, parents, 0, g.num_nodes,
                         pull_frontier, pull_next_frontier, num_nodes);               
                 /*std::cout << "(Pull) Iter " << iters << " num nodes: " <<*/
                     /*num_nodes << std::endl;*/
@@ -92,7 +92,7 @@ double bfs_do_cpu(
         } else {
             edges_to_check -= num_edges;
             num_edges = 0;
-            epoch_bfs_push_one_to_one(g, parents, push_frontier, num_edges);       
+            epoch_bfs_push_cpu_one_to_one(g, parents, push_frontier, num_edges);       
             push_frontier.slide_window();
             /*std::cout << "(Push) Iter " << iters << " num edges: " << num_edges*/
                 /*<< std::endl;*/
@@ -136,7 +136,7 @@ double bfs_push_cpu(
     Timer timer; timer.Start();
     while (not frontier.empty()) {
         num_edges = 0;
-        epoch_bfs_push_one_to_one(g, parents, frontier, num_edges);
+        epoch_bfs_push_cpu_one_to_one(g, parents, frontier, num_edges);
         frontier.slide_window();
     }
     timer.Stop();
@@ -174,7 +174,7 @@ double bfs_pull_cpu(
     Timer timer; timer.Start();
     do {
         num_nodes = 0;
-        epoch_bfs_pull_one_to_one(g, parents, 0, g.num_nodes, frontier, 
+        epoch_bfs_pull_cpu_one_to_one(g, parents, 0, g.num_nodes, frontier, 
                 next_frontier, num_nodes);       
 
         std::swap(frontier, next_frontier);
@@ -204,7 +204,7 @@ double bfs_pull_cpu(
  *   - frontier  <- BFS frontier.
  *   - num_edges <-number of edges goung out of the next frontier.
  */
-void epoch_bfs_push_one_to_one(
+void epoch_bfs_push_cpu_one_to_one(
         const CSRUWGraph &g, nid_t * const parents,
         SlidingWindow<nid_t> &frontier, nid_t &num_edges
 ) {
@@ -253,7 +253,7 @@ void epoch_bfs_push_one_to_one(
  *   - end_id        <- ending node id.
  *   - num_nodes     <- number of nodes in the next frontier.
  */
-void epoch_bfs_pull_one_to_one(
+void epoch_bfs_pull_cpu_one_to_one(
         const CSRUWGraph &g, nid_t * const parents,
         const nid_t start_id, const nid_t end_id,
         const Bitmap::Bitmap * const frontier,
@@ -285,19 +285,28 @@ void epoch_bfs_pull_one_to_one(
     }
 }
 
+/*****************************************************************************
+ ***** Helper Functions ******************************************************
+ *****************************************************************************/
+
+/** Convert sliding window frontier into bitmap frontier.
+ * Parameters:
+ *   - window <- input sliding window frontier.
+ *   - bitmap <- output bitmap frontier.
+ */
 void conv_window_to_bitmap(
-        const SlidingWindow<nid_t> &window, Bitmap::Bitmap * const frontier
+        const SlidingWindow<nid_t> &window, Bitmap::Bitmap * const bitmap
 ) {
     #pragma omp parallel for
     for (const nid_t u : window)
-        Bitmap::set_bit_atomic(frontier, u);
+        Bitmap::set_bit_atomic(bitmap, u);
 }
 
 /** 
  * Convert bitmap frontier into sliding window frontier.
  * Parameters:
  *   - bitmap    <- input bitmap frontier.
- *   - frontier  <- output bitmap frontier.
+ *   - frontier  <- output sliding window frontier.
  *   - num_nodes <- number of nodes in graph.
  */
 void conv_bitmap_to_window(
@@ -320,9 +329,6 @@ void conv_bitmap_to_window(
     window.slide_window();
 }
 
-/*****************************************************************************
- ***** Helper Functions ******************************************************
- *****************************************************************************/
 
 /**
  * Reset parents array. Set source ID's parent to itself.
