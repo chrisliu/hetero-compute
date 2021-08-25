@@ -33,20 +33,26 @@ protected:
 
 class BFSCPUPushTreeBenchmark : public BFSTreeBenchmark {
 public:
-    BFSCPUPushTreeBenchmark(const CSRUWGraph *g);
+    BFSCPUPushTreeBenchmark(const CSRUWGraph *g, 
+            bfs_cpu_push_epoch_func epoch_kernel_);
     tree_res_t tree_microbenchmark(const int depth) override;
     layer_res_t layer_microbenchmark(const nid_t num_segments) override;
 
 protected:
+    bfs_cpu_push_epoch_func epoch_kernel;
+
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
 };
 
 
 class BFSCPUPullTreeBenchmark : public BFSTreeBenchmark {
 public:
-    BFSCPUPullTreeBenchmark(const CSRUWGraph *g);
+    BFSCPUPullTreeBenchmark(const CSRUWGraph *g, 
+            bfs_cpu_pull_epoch_func epoch_kernel_);
 
 protected:
+    bfs_cpu_pull_epoch_func epoch_kernel;
+
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
 };
 
@@ -119,8 +125,10 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(
     return result;
 }
 
-BFSCPUPushTreeBenchmark::BFSCPUPushTreeBenchmark(const CSRUWGraph *g)
+BFSCPUPushTreeBenchmark::BFSCPUPushTreeBenchmark(const CSRUWGraph *g,
+        bfs_cpu_push_epoch_func epoch_kernel_)
     : BFSTreeBenchmark(g)
+    , epoch_kernel(epoch_kernel_)
 {}
 
 tree_res_t BFSCPUPushTreeBenchmark::tree_microbenchmark(const int depth) {
@@ -185,7 +193,7 @@ segment_res_t BFSCPUPushTreeBenchmark::benchmark_segment(
 
         // Run kernel.
         timer.Start();
-        epoch_bfs_push_cpu_one_to_one(*g, parents, frontier, num_edges);
+        (*epoch_kernel)(*g, parents, frontier, num_edges);
         timer.Stop();
 
         frontier.slide_window();
@@ -202,8 +210,10 @@ segment_res_t BFSCPUPushTreeBenchmark::benchmark_segment(
     return result;
 }
 
-BFSCPUPullTreeBenchmark::BFSCPUPullTreeBenchmark(const CSRUWGraph *g)
+BFSCPUPullTreeBenchmark::BFSCPUPullTreeBenchmark(const CSRUWGraph *g,
+        bfs_cpu_pull_epoch_func epoch_kernel_)
     : BFSTreeBenchmark(g)
+    , epoch_kernel(epoch_kernel_)
 {}
 
 segment_res_t BFSCPUPullTreeBenchmark::benchmark_segment(
@@ -232,7 +242,7 @@ segment_res_t BFSCPUPullTreeBenchmark::benchmark_segment(
 
         // Run kernel.
         timer.Start();
-        epoch_bfs_pull_cpu_one_to_one(*g, parents, start_id, end_id,
+        (*epoch_kernel)(*g, parents, start_id, end_id,
                 frontier, next_frontier, num_nodes);
         timer.Stop();
 

@@ -343,7 +343,7 @@ BFSTreeBenchmark::BFSTreeBenchmark(const CSRUWGraph *g_)
 
         // Run BFS pull as normal.
         num_nodes = 0;
-        epoch_bfs_pull_cpu_one_to_one(*g, parents, 0, g->num_nodes, frontier,
+        epoch_bfs_pull_cpu(*g, parents, 0, g->num_nodes, frontier,
                 next_frontier, num_nodes);
         std::swap(frontier, next_frontier);
         Bitmap::reset(next_frontier);

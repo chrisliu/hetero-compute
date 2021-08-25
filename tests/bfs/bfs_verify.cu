@@ -39,11 +39,20 @@ int main(int argc, char *argv[]) {
     nid_t *depths = compute_proper_depth(g, source_id);
     std::cout << "Computed oracle depths." << std::endl;
 
-    /*// Check BFS CPU push kernel.*/
-    verify(g, depths, source_id, "BFS CPU push",
+    // Check BFS CPU push by node kernel.
+    verify(g, depths, source_id, "BFS CPU push by node",
             [&](){
                 nid_t *parents = nullptr;
-                bfs_push_cpu(g, source_id, &parents);
+                bfs_push_cpu<epoch_bfs_push_cpu_by_node>(g, source_id, &parents);
+                return parents;
+            }
+    );
+
+    // Check BFS CPU push by edge kernel.
+    verify(g, depths, source_id, "BFS CPU push by edge",
+            [&](){
+                nid_t *parents = nullptr;
+                bfs_push_cpu<epoch_bfs_push_cpu_by_node>(g, source_id, &parents);
                 return parents;
             }
     );
@@ -70,7 +79,7 @@ int main(int argc, char *argv[]) {
     verify(g, depths, source_id, "BFS GPU one-to-one",
             [&](){
                 nid_t *parents = nullptr;
-                bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_one_to_one, 256, 1024);
+                bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_one_to_one);
                 return parents;
             }
     );
@@ -79,7 +88,7 @@ int main(int argc, char *argv[]) {
     verify(g, depths, source_id, "BFS GPU warp",
             [&](){
                 nid_t *parents = nullptr;
-                bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_warp, 256, 1024);
+                bfs_gpu(g, source_id, &parents, epoch_bfs_pull_gpu_warp);
                 return parents;
             }
     );
@@ -88,7 +97,7 @@ int main(int argc, char *argv[]) {
     verify(g, depths, source_id, "BFS GPU sync warp",
             [&](){
                 nid_t *parents = nullptr;
-                bfs_gpu(g, source_id, &parents, epoch_bfs_sync_pull_gpu_warp, 256, 1024);
+                bfs_gpu(g, source_id, &parents, epoch_bfs_sync_pull_gpu_warp);
                 return parents;
             }
     );

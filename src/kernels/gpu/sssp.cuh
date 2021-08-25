@@ -294,7 +294,7 @@ std::vector<SSSPGPU> sssp_gpu_kernels = {
     SSSPGPU::one_to_one, SSSPGPU::warp_min, SSSPGPU::block_min
 };
 
-std::vector<SSSPGPU> get_kernels([[maybe_unused]] SSSPGPU unused) {
+std::vector<SSSPGPU> get_kernels(UNUSED SSSPGPU unused) {
     // Using hack to overload function by return type.
     return sssp_gpu_kernels;
 }

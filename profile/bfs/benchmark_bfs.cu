@@ -28,7 +28,7 @@
 // Run epoch kernels.
 #define RUN_EPOCH_KERNELS
 // Run full kernels.
-/*#define RUN_FULL_KERNELS*/
+#define RUN_FULL_KERNELS
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
@@ -73,9 +73,9 @@ void save_results(std::string filename, ResT &result) {
  */
 template <typename IdT, typename ...OptArgsT>
 __inline__
-std::string get_filename(IdT ker, OptArgsT ...args) {
+std::string get_filename(int epoch, IdT ker, OptArgsT ...args) {
     std::stringstream ss;
-    ss << to_repr(ker);
+    ss << "epoch" << epoch << "_" << to_repr(ker);
     if (sizeof...(args) > 0)
         volatile int unused[] = { (ss << "_" << args, 0)... };
     ss << ".yaml";
@@ -117,24 +117,28 @@ void run_treebenchmark(CSRUWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
     // TOOD: this is a hacky way to pass arguments into the benchmark function.
     BenchmarkT bench(&g, get_kernel(ker), args...);
 
+    for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
+        bench.set_epoch(epoch);
+
 #ifdef ONLY_LAYER
-    auto res = bench.layer_microbenchmark(NUM_SEGMENTS);
+        auto res = bench.layer_microbenchmark(NUM_SEGMENTS);
 #else 
-    auto res = bench.tree_microbenchmark(DEPTH);
+        auto res = bench.tree_microbenchmark(DEPTH);
 #endif  // ONLY_LAYER
 
-    // Configure metadata.
-    res.device_name = to_string(dev);
-    res.kernel_name = get_kernel_name(ker, args...);
+        // Configure metadata.
+        res.device_name = to_string(dev);
+        res.kernel_name = get_kernel_name(ker, args...);
 
     // Output results appropriately.
 #ifdef PRINT_RESULTS
-    std::cout << res;
+        std::cout << res;
 #endif // PRINT_RESULTS
 
 #ifdef SAVE_RESULTS
-    save_results(get_filename(ker, args...), res);
+        save_results(get_filename(epoch, ker, args...), res);
 #endif // SAVE_RESULTS
+    }
 }
 
 /*****************************************************************************
@@ -160,65 +164,14 @@ int main(int argc, char *argv[]) {
     std::cout << " > Loaded in " << timer.Millisecs() << " ms." << std::endl;
 
 #ifdef RUN_EPOCH_KERNELS
-    {
-        BFSCPUPushTreeBenchmark bench(&g);
+    run_treebenchmark<BFSCPUPushTreeBenchmark>(g, DEVCPU, BFSCPUPush::by_node);
+    run_treebenchmark<BFSCPUPushTreeBenchmark>(g, DEVCPU, BFSCPUPush::by_edge);
+    run_treebenchmark<BFSCPUPullTreeBenchmark>(g, DEVCPU, BFSCPUPull::pull);
 
-        for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
-            bench.set_epoch(epoch);
-            auto res = bench.layer_microbenchmark(1);
-            std::cout << "Epoch " << epoch << "-----------------------------"
-                << std::endl;
-            std::cout << res;
-        }
-    }
-
-    {
-        BFSCPUPullTreeBenchmark bench(&g);
-        
-        for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {
-            bench.set_epoch(epoch);
-            auto res = bench.layer_microbenchmark(NUM_SEGMENTS);
-            std::cout << "Epoch " << epoch << "-----------------------------"
-                << std::endl;
-            std::cout << res;
-        }
-    }
-
-    /*{*/
-        /*BFSGPUTreeBenchmark bench(&g, epoch_bfs_pull_gpu_one_to_one);*/
-
-        /*for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {*/
-            /*bench.set_epoch(epoch);*/
-            /*auto res = bench.layer_microbenchmark(NUM_SEGMENTS);*/
-            /*std::cout << "Epoch " << epoch << "-----------------------------"*/
-                /*<< std::endl;*/
-            /*std::cout << res;*/
-        /*}*/
-    /*}*/
-
-    /*{*/
-        /*BFSGPUTreeBenchmark bench(&g, epoch_bfs_sync_pull_gpu_warp<1>);*/
-
-        /*for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {*/
-            /*bench.set_epoch(epoch);*/
-            /*auto res = bench.layer_microbenchmark(NUM_SEGMENTS);*/
-            /*std::cout << "Epoch " << epoch << "-----------------------------"*/
-                /*<< std::endl;*/
-            /*std::cout << res;*/
-        /*}*/
-    /*}*/
-
-    /*{*/
-        /*BFSGPUTreeBenchmark bench(&g, epoch_bfs_sync_pull_gpu_warp<2>);*/
-
-        /*for (int epoch = 0; epoch < bench.num_epochs(); epoch++) {*/
-            /*bench.set_epoch(epoch);*/
-            /*auto res = bench.layer_microbenchmark(NUM_SEGMENTS);*/
-            /*std::cout << "Epoch " << epoch << "-----------------------------"*/
-                /*<< std::endl;*/
-            /*std::cout << res;*/
-        /*}*/
-    /*}*/
+    run_treebenchmark<BFSGPUTreeBenchmark>(g, DEVGPU, BFSGPU::one_to_one,
+            NUM_BLOCKS, 1024);
+    run_treebenchmark<BFSGPUTreeBenchmark>(g, DEVGPU, BFSGPU::warp,
+            NUM_BLOCKS, 1024);
 #endif // RUN_EPOCH_KERNELS
 
     /*enable_all_peer_access();*/
@@ -227,11 +180,21 @@ int main(int argc, char *argv[]) {
 #ifdef RUN_FULL_KERNELS
     SourcePicker<CSRUWGraph> sp(&g);
 
-    // Run CPU push kernel.
+    // Run CPU push by node kernel.
     sp.reset();
     {
-        std::cout << "BFS CPU push:" << std::endl;
-        segment_res_t res = benchmark_bfs_cpu(g, bfs_push_cpu, sp);
+        std::cout << "BFS CPU push by node:" << std::endl;
+        segment_res_t res = benchmark_bfs_cpu(g, 
+                bfs_push_cpu<epoch_bfs_push_cpu_by_node>, sp);
+        std::cout << res;
+    }
+
+    // Run CPU push by edge kernel.
+    sp.reset();
+    {
+        std::cout << "BFS CPU push by edge:" << std::endl;
+        segment_res_t res = benchmark_bfs_cpu(g, 
+                bfs_push_cpu<epoch_bfs_push_cpu_by_edge>, sp);
         std::cout << res;
     }
 

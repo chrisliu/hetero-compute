@@ -7,6 +7,7 @@
 
 #include "../bitmap.cuh"
 #include "../graph.cuh"
+#include "../window.h"
 
 /******************************************************************************
  ***** Data Structures ********************************************************
@@ -37,6 +38,13 @@ typedef void (*sssp_gpu_epoch_func)(const offset_t *,
 
 /** BFS */
 /**   Epoch Kernels */
+/**     CPU */
+typedef void (*bfs_cpu_push_epoch_func)(const CSRUWGraph &, nid_t * const,
+        SlidingWindow<nid_t> &, nid_t &);
+typedef void (*bfs_cpu_pull_epoch_func)(const CSRUWGraph &, nid_t * const,
+        const nid_t, const nid_t, const Bitmap::Bitmap * const,
+        Bitmap::Bitmap * const, nid_t &);
+
 /**     GPU */
 typedef void (*bfs_gpu_epoch_func)(const offset_t * const, 
         const nid_t * const, nid_t * const, const nid_t, const nid_t, 

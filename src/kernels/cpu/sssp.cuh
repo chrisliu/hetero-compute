@@ -167,7 +167,7 @@ std::vector<SSSPCPU> sssp_cpu_kernels = {
     SSSPCPU::one_to_one
 };
 
-std::vector<SSSPCPU> get_kernels([[maybe_unused]] SSSPCPU unused) {
+std::vector<SSSPCPU> get_kernels(UNUSED SSSPCPU unused) {
     // Using hack to overload function by return type.
     return sssp_cpu_kernels;
 }

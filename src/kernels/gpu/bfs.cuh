@@ -6,6 +6,7 @@
 #define SRC_KERNELS_GPU__BFS_CUH
 
 #include <algorithm>
+#include <vector>
 
 #include "../kernel_types.cuh"
 #include "../../bitmap.cuh"
@@ -284,6 +285,83 @@ void epoch_bfs_sync_pull_gpu_warp(
     // Push update count.
     if (warpid == 0)
         atomicAdd(num_nodes, local_num_nodes);
+}
+
+/*****************************************************************************
+ ***** Helper Functions ******************************************************
+ *****************************************************************************/
+
+/** Identifier for epoch kernels. */
+enum class BFSGPU {
+    one_to_one, warp, undefined
+    /*one_to_one, warp, block, undefined*/
+};
+
+/** List of kernels available (no good iterator for enum classes). */
+std::vector<BFSGPU> bfs_gpu_kernels = {
+    BFSGPU::one_to_one, BFSGPU::warp
+    /*BFSGPU::one_to_one, BFSGPU::warp, BFSGPU::block*/
+};
+
+std::vector<BFSGPU> get_kernels(UNUSED BFSGPU unused) {
+    // Using hack to overload function by return type.
+    return bfs_gpu_kernels;
+}
+
+/** 
+ * Convert epoch kernel ID to its representation name (not as human-readable). 
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel name.
+ */
+std::string to_repr(BFSGPU ker) {
+    switch (ker) {
+        case BFSGPU::one_to_one: return "bfs_gpu_onetoone";
+        case BFSGPU::warp:       return "bfs_gpu_warp";
+        /*case BFSGPU::block:      return "bfs_gpu_block";*/
+        case BFSGPU::undefined:  
+        default:                 return "";
+    }
+}
+
+/** 
+ * Convert epoch kernel ID to its human-readable name. 
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel name.
+ */
+std::string to_string(BFSGPU ker) {
+    switch (ker) {
+        case BFSGPU::one_to_one: return "BFS GPU one-to-one";
+        case BFSGPU::warp:       return "BFS GPU warp";
+        /*case BFSGPU::block:      return "BFS GPU block";*/
+        case BFSGPU::undefined:  
+        default:                 return "undefined BFS GPU kernel";
+    }
+}
+
+/**
+ * Convert epoch kernel ID to kernel function pointer.
+ * Parameters:
+ *   - ker <- kernel ID.
+ * Returns:
+ *   kernel function pointer.
+ */
+bfs_gpu_epoch_func get_kernel(BFSGPU ker) {
+    switch (ker) {
+        case BFSGPU::one_to_one: return epoch_bfs_pull_gpu_one_to_one;
+        case BFSGPU::warp:       return epoch_bfs_pull_gpu_warp;
+        /*case BFSGPU::block:      return epoch_bfs_pull_gpu_block;*/
+        case BFSGPU::undefined:  
+        default:                 return nullptr;
+    }
+}
+
+std::ostream &operator<<(std::ostream &os, BFSGPU ker) {
+    os << to_string(ker);
+    return os;
 }
 
 #endif // SRC_KERNELS_GPU__BFS_CUH
