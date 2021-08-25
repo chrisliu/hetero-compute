@@ -386,7 +386,7 @@ void conv_bitmap_to_window(
  *   - num_nodes <- number of nodes in the graph.
  *   - source_id <- starting node id.
  */
-__inline__
+inline
 void reset_parents(nid_t * const parents, const nid_t num_nodes, 
         const nid_t source_id
 ) {

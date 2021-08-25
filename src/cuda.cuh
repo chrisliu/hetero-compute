@@ -36,7 +36,7 @@ template <typename T,
           typename = typename std::enable_if<is_contained<T, int, unsigned int, 
              long, unsigned long, long long, unsigned long long, float, 
              double>::value>>
-__inline__ __device__
+__device__ inline
 T warp_min(T val) {
     for (int offset = warpSize >> 1; offset > 0; offset >>= 1) 
         val = min(val, __shfl_down_sync(ALLWARP, val, offset));
@@ -61,7 +61,7 @@ template <typename T,
           typename = typename std::enable_if<is_contained<T, int, unsigned int, 
              long, unsigned long, long long, unsigned long long, float, 
              double>::value>>
-__device__ __inline__
+__device__ inline
 T warp_all_min(T val) {
     for (int mask = warpSize >> 1; mask > 0; mask >>= 1) 
         val = min(val, __shfl_xor_sync(ALLWARP, val, mask));
@@ -81,7 +81,7 @@ template <typename T,
           typename = typename std::enable_if<is_contained<T, int, unsigned int, 
              long, unsigned long, long long, unsigned long long, float, 
              double>::value>>
-__device__ __inline__
+__device__ inline
 T warp_max(T val) {
     for (int offset = warpSize >> 1; offset > 0; offset >>= 1) 
         val = max(val, __shfl_down_sync(ALLWARP, val, offset));
@@ -102,7 +102,7 @@ template <typename T,
           typename = typename std::enable_if<is_contained<T, int, unsigned int, 
              long, unsigned long, long long, unsigned long long, float, 
              double>::value>>
-__device__ __inline__
+__device__ inline
 T warp_all_max(T val) {
     for (int mask = warpSize >> 1; mask > 0; mask >>= 1) 
         val = max(val, __shfl_xor_sync(ALLWARP, val, mask));
@@ -122,7 +122,7 @@ template <typename T,
           typename = typename std::enable_if<is_contained<T, int, unsigned int,
              long, unsigned long, long long, unsigned long long, float,
              double>::value>>
-__device__ __inline__
+__device__ inline
 T warp_or(T val) {
     for (int offset = warpSize >> 1; offset > 0; offset >>= 1) 
         val |= __shfl_down_sync(ALLWARP, val, offset);
@@ -143,7 +143,7 @@ template <typename T,
           typename = typename std::enable_if<is_contained<T, int, unsigned int, 
              long, unsigned long, long long, unsigned long long, float, 
              double>::value>>
-__device__ __inline__
+__device__ inline
 T warp_all_or(T val) {
     for (int mask = warpSize >> 1; mask > 0; mask >>= 1) 
         val |= __shfl_xor_sync(ALLWARP, val, mask);

@@ -285,7 +285,7 @@ segment_res_t BFSGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
  * Parameters:
  *   - cu_frontier <- pointer to CPU-copy of GPU frontier object.
  */
-__inline__
+inline
 void BFSGPUTreeBenchmark::copy_frontier(Bitmap::Bitmap * const cu_frontier) {
     Bitmap::Bitmap *cpu_frontier = get_frontier();
     CUDA_ERRCHK(cudaMemcpy(cu_frontier->buffer, cpu_frontier->buffer,
@@ -298,7 +298,7 @@ void BFSGPUTreeBenchmark::copy_frontier(Bitmap::Bitmap * const cu_frontier) {
  * Parameters:
  *   - cu_parents <- pointer to GPU frontier object.
  */
-__inline__
+inline
 void BFSGPUTreeBenchmark::copy_parents(nid_t * const cu_parents) {
     CUDA_ERRCHK(cudaMemcpy(cu_parents, get_parents(), 
                 g->num_nodes * sizeof(nid_t), cudaMemcpyHostToDevice));

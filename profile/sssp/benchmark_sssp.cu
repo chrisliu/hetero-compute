@@ -55,7 +55,7 @@
  */
 #ifdef SAVE_RESULTS
 template <typename ResT>
-__inline__
+inline
 void save_results(std::string filename, ResT &result) {
     std::ofstream ofs(filename, std::ofstream::out);
     ofs << result;
@@ -72,7 +72,7 @@ void save_results(std::string filename, ResT &result) {
  *   kernel identifier.
  */
 template <typename IdT, typename ...OptArgsT>
-__inline__
+inline
 std::string get_filename(IdT ker, OptArgsT ...args) {
     std::stringstream ss;
     ss << to_repr(ker);
@@ -91,7 +91,7 @@ std::string get_filename(IdT ker, OptArgsT ...args) {
  *   kernel identifier.
  */
 template <typename IdT, typename ...OptArgsT>
-__inline__
+inline
 std::string get_kernel_name(IdT ker, OptArgsT ...args) {
     std::stringstream ss;
     ss << to_string(ker);

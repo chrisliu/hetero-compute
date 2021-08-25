@@ -229,7 +229,7 @@ std::istream& operator>>(std::istream &is, GenericCSRGraph<NeighborT> &g) {
 template <typename GraphT,
           typename = typename std::enable_if<
               is_templated_instance<GraphT, GenericCSRGraph>::value>>
-__inline__
+inline
 GraphT load_graph_from_file(char *filename) {
     GraphT g;
     std::ifstream ifs(filename, std::ifstream::in | std::ifstream::binary);
@@ -248,7 +248,7 @@ GraphT load_graph_from_file(char *filename) {
  *   - end_id          <- ending node id (exclusive).
  */
 template <typename NeighborT>
-__inline__
+inline
 void copy_subgraph_to_device(const GenericCSRGraph<NeighborT> &g, 
         offset_t **cu_index_to, NeighborT **cu_neighbors_to, 
         const nid_t start_id, const nid_t end_id

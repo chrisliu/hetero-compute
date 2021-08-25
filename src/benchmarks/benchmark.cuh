@@ -282,7 +282,7 @@ layer_res_t TreeBenchmark<GraphT>::layer_microbenchmark(const nid_t num_segments
  * Wrapper for compute_equal_edge_ranges.
  */
 template <typename GraphT>
-__inline__
+inline
 nid_t *TreeBenchmark<GraphT>::compute_ranges(const nid_t num_segments) const {
     return compute_equal_edge_ranges(*g, num_segments);
 }
@@ -395,12 +395,12 @@ nid_t BFSTreeBenchmark::num_epochs() const {
     return parents_arr.size();
 }
 
-__inline__
+inline
 nid_t *BFSTreeBenchmark::get_parents() const {
     return parents_arr[cur_epoch];
 }
 
-__inline__
+inline
 Bitmap::Bitmap *BFSTreeBenchmark::get_frontier() const {
     return frontiers[cur_epoch];
 }
@@ -409,7 +409,7 @@ Bitmap::Bitmap *BFSTreeBenchmark::get_frontier() const {
  * Modify default compute ranges to align range start and end to bitmap's
  * internal data type size (i.e., num bits).
  */
-__inline__
+inline
 nid_t *BFSTreeBenchmark::compute_ranges(const nid_t num_segments) const {
     return compute_equal_edge_ranges(*g, num_segments, Bitmap::data_size);
 }

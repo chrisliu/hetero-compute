@@ -20,10 +20,10 @@ using data_t = int;
 const std::size_t data_size = sizeof(data_t) * 8;
 
 // Functions for offset computation. 
-__host__ __device__ __inline__
+__host__ __device__ inline
 std::size_t data_offset(std::size_t n) { return n / data_size; }
 
-__host__ __device__ __inline__
+__host__ __device__ inline
 std::size_t bit_offset(std::size_t n) { return n & (data_size - 1); }
 
 // Bitmap data structure.
@@ -49,7 +49,7 @@ void cu_cpu_reset(Bitmap * const cu_bitmap);
  * Returns:
  *   Pointer to bitmap object.
  */
-__host__ __inline__
+__host__ inline
 Bitmap *constructor(const std::size_t num_elements, const bool use_cuda = false) {
     Bitmap *bitmap     = new Bitmap;
     bitmap->size       = (num_elements + data_size - 1) / data_size;
@@ -65,7 +65,7 @@ Bitmap *constructor(const std::size_t num_elements, const bool use_cuda = false)
     return bitmap;
 }
 
-__host__ __inline__
+__host__ inline
 void destructor(Bitmap ** const bitmap) {
     if ((*bitmap)->using_cuda) {
         CUDA_ERRCHK(cudaFreeHost((*bitmap)->buffer));
@@ -76,30 +76,30 @@ void destructor(Bitmap ** const bitmap) {
     *bitmap = nullptr;
 }
 
-__host__ __inline__
+__host__ inline
 void set_bit_atomic(Bitmap * const bitmap, const std::size_t idx) {
     data_t bit = static_cast<data_t>(1) << bit_offset(idx);
     __sync_fetch_and_or(&bitmap->buffer[data_offset(idx)], bit);
 }
 
-__host__ __device__ __inline__
+__host__ __device__ inline
 void set_bit(Bitmap * const bitmap, const std::size_t idx) {
     bitmap->buffer[data_offset(idx)] |= \
             static_cast<data_t>(1) << bit_offset(idx);
 }
 
-__host__ __device__ __inline__
+__host__ __device__ inline
 bool get_bit(const Bitmap * const bitmap, const std::size_t idx) {
     return bitmap->buffer[data_offset(idx)] >> bit_offset(idx) \
             & static_cast<data_t>(1);    
 }
 
-__host__ __inline__
+__host__ inline
 void reset(Bitmap * const bitmap) {
     std::fill(bitmap->buffer, bitmap->buffer + bitmap->size, 0);
 }
 
-__host__ __inline__
+__host__ inline
 bool copy(const Bitmap * const from, Bitmap * const to) {
     if (from->size != to->size) return false;
 
@@ -119,7 +119,7 @@ bool copy(const Bitmap * const from, Bitmap * const to) {
  * Returns:
  *   Pointer ot CPU bitmap object with GPU buffer.
  */
-__host__ __inline__
+__host__ inline
 Bitmap *cu_cpu_constructor(const std::size_t num_elements) {
     Bitmap *cu_bitmap     = new Bitmap;
     cu_bitmap->size       = (num_elements + data_size - 1) / data_size;
@@ -132,20 +132,20 @@ Bitmap *cu_cpu_constructor(const std::size_t num_elements) {
     return cu_bitmap;
 }
 
-__host__ __inline__
+__host__ inline
 void cu_cpu_destructor(Bitmap ** const cu_bitmap) {
     CUDA_ERRCHK(cudaFree((*cu_bitmap)->buffer));
     delete[] *cu_bitmap;
     *cu_bitmap = nullptr;
 }
 
-__host__ __inline__
+__host__ inline
 void cu_cpu_reset(Bitmap * const cu_bitmap) {
     CUDA_ERRCHK(cudaMemset(cu_bitmap->buffer, 0, 
                 cu_bitmap->size * sizeof(data_t)));
 }
 
-__host__ __inline__
+__host__ inline
 void cu_cpu_set_bit(Bitmap * const cu_bitmap, const std::size_t idx) {
     data_t dat;
     CUDA_ERRCHK(cudaMemcpy(&dat, cu_bitmap->buffer + data_offset(idx),
@@ -162,7 +162,7 @@ void cu_cpu_set_bit(Bitmap * const cu_bitmap, const std::size_t idx) {
  * Returns:
  *   Bitmap entirely allocated in GPU memory.
  */
-__host__ __inline__
+__host__ inline
 Bitmap *cu_constructor(const Bitmap::Bitmap * const bitmap) {
     Bitmap::Bitmap *cu_bitmap = nullptr;
     CUDA_ERRCHK(cudaMalloc((void **) &cu_bitmap, sizeof(Bitmap)));
@@ -176,13 +176,13 @@ Bitmap *cu_constructor(const Bitmap::Bitmap * const bitmap) {
  * Parameters:
  *   - cu_bitmap <- cu_copy_constructor bitmap.
  */
-__host__ __inline__
+__host__ inline
 void cu_destructor(Bitmap::Bitmap ** const cu_bitmap) {
     CUDA_ERRCHK(cudaFree(*cu_bitmap));
     *cu_bitmap = nullptr;
 }
 
-__device__ __inline__
+__device__ inline
 void cu_set_bit_atomic(Bitmap * const cu_bitmap, const std::size_t idx) {
     data_t bit = static_cast<data_t>(1) << bit_offset(idx);
     atomicOr(cu_bitmap->buffer + data_offset(idx), bit);    
