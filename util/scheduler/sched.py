@@ -8,13 +8,43 @@ import scheduler
 from collections import defaultdict
 from typing import *
 
+# Supported algorithms.
+algorithms = ['bfs', 'sssp']
+
 def main():
     # Load arguments.
     parser = create_parser()
     args = parser.parse_args()
 
+    if args.algorithm == 'bfs':
+        print("Handling BFS ...")
+    elif args.algorithm == 'sssp':
+        print("Handling SSSP ...")
+        handle_sssp(args)
+
+def create_parser() -> argparse.ArgumentParser:
+    """Returns a valid python argument parser."""
+    parser = argparse.ArgumentParser(description="Simulate and generate " \
+                                     "a heterogeneous configuration of " \
+                                     "kernels and graph segments.")
+
+    ## Helper functions.
+    def valid_yaml_file(fname: str) -> str:
+        ext = os.path.splitext(fname)[1][1:]
+        if ext != 'yaml':
+            parser.error(f"benchmark profile \"{fname}\" must be a YAML file") 
+        return fname
+
+    ## Parser arguments.
+    parser.add_argument('--algorithm', '-a', choices=algorithms,
+                        required=True, help=f"graph algorithm")
+    parser.add_argument('profiles', type=valid_yaml_file, nargs='+',
+                        help="YAML benchmark profiles for devices")
+    return parser
+
+def handle_sssp(args: argparse.Namespace) -> None:
     # Load profiles and query device counts.
-    profiles = load_profiles(args.profiles)
+    profiles = load_profiles_sssp(args.profiles)
     hardware_config = query_devices(profiles)
     #hardware_config = {'Intel Xeon E5-2686': 1, 'NVIDIA Tesla M60': 2}
     #hardware_config = {'Intel i7-9700K': 1, 'NVIDIA Quadro RTX 4000': 2}
@@ -46,29 +76,11 @@ def main():
     write_schedule(schedule, 'out.skd')
 
     # Write out SSSP hetero file.
-    with open('sssp_pull.cuh', 'w') as ofs:
+    with open('sssp.cuh', 'w') as ofs:
         ofs.write(
             scheduler.kernelgen.generate_sssp_hetero_source_code(schedule))
 
-def create_parser() -> argparse.ArgumentParser:
-    """Returns a valid python argument parser."""
-    parser = argparse.ArgumentParser(description="Simulate and generate " \
-                                     "a heterogeneous configuration of " \
-                                     "kernels and graph segments.")
-
-    ## Helper functions.
-    def valid_yaml_file(fname: str) -> str:
-        ext = os.path.splitext(fname)[1][1:]
-        if ext != 'yaml':
-            parser.error(f"benchmark profile \"{fname}\" must be a YAML file") 
-        return fname
-
-    ## Parser arguments.
-    parser.add_argument('profiles', type=valid_yaml_file, nargs='+',
-                        help="YAML benchmark profiles for devices")
-    return parser
-
-def load_profiles(fnames: List[str]) -> List[scheduler.DeviceProfile]:
+def load_profiles_sssp(fnames: List[str]) -> List[scheduler.DeviceProfile]:
     """Returns contents of profile files."""
     device_map = defaultdict(list)
     for fname in fnames:

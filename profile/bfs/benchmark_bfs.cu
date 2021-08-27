@@ -28,7 +28,7 @@
 // Run epoch kernels.
 #define RUN_EPOCH_KERNELS
 // Run full kernels.
-#define RUN_FULL_KERNELS
+/*#define RUN_FULL_KERNELS*/
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
@@ -132,6 +132,7 @@ void run_treebenchmark(CSRUWGraph &g, Device dev, IdT ker, OptArgsT ...args) {
 
     // Output results appropriately.
 #ifdef PRINT_RESULTS
+        std::cout << "------ Epoch " << epoch << "------" << std::endl;
         std::cout << res;
 #endif // PRINT_RESULTS
 

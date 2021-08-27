@@ -28,7 +28,7 @@
 // Run epoch kernels.
 #define RUN_EPOCH_KERNELS
 // Run full kernels.
-/*#define RUN_FULL_KERNELS*/
+#define RUN_FULL_KERNELS
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
@@ -182,6 +182,7 @@ int main(int argc, char *argv[]) {
     // Full kernel runs.
 #ifdef RUN_FULL_KERNELS
     SourcePicker<CSRWGraph> sp(&g);
+
     // Run CPU kernel.
     sp.reset();
     {
@@ -191,41 +192,41 @@ int main(int argc, char *argv[]) {
         std::cout << res;
     }
 
-    /*[>// Run GPU naive kernel.<]*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "SSSP GPU naive:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_gpu(g,*/
-                /*epoch_sssp_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);*/
-        /*std::cout << res;*/
-    /*}*/
+    /*// Run GPU naive kernel.*/
+    sp.reset();
+    {
+        std::cout << "SSSP GPU naive:" << std::endl;
+        segment_res_t res = benchmark_sssp_gpu(g,
+                epoch_sssp_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);
+        std::cout << res;
+    }
 
-    /*[>// Run GPU warp min kernel.<]*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "SSSP GPU warp min:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_gpu(g,*/
-                /*epoch_sssp_pull_gpu_warp_min, sp, NUM_BLOCKS, 1024);*/
-        /*std::cout << res;*/
-    /*}*/
+    /*// Run GPU warp min kernel.*/
+    sp.reset();
+    {
+        std::cout << "SSSP GPU warp min:" << std::endl;
+        segment_res_t res = benchmark_sssp_gpu(g,
+                epoch_sssp_pull_gpu_warp_min, sp, NUM_BLOCKS, 1024);
+        std::cout << res;
+    }
 
-    /*[>// Run GPU block min kernel.<]*/
-    /*sp.reset();*/
-    /*{*/
-        /*std::cout << "SSSP GPU block min:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_gpu(g,*/
-                /*epoch_sssp_pull_gpu_block_min, sp, NUM_BLOCKS, 1024);*/
-        /*std::cout << res;*/
-    /*}*/
+    /*// Run GPU block min kernel.*/
+    sp.reset();
+    {
+        std::cout << "SSSP GPU block min:" << std::endl;
+        segment_res_t res = benchmark_sssp_gpu(g,
+                epoch_sssp_pull_gpu_block_min, sp, NUM_BLOCKS, 1024);
+        std::cout << res;
+    }
 
     // Run heterogeneous kernel.
-    /*sp.reset();*/
-    /*{*/
-        /*// Load in schedule.*/
-        /*std::cout << "SSSP heterogeneous:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_heterogeneous(g, sp);*/
-        /*std::cout << res;*/
-    /*}*/
+    sp.reset();
+    {
+        // Load in schedule.
+        std::cout << "SSSP heterogeneous:" << std::endl;
+        segment_res_t res = benchmark_sssp_heterogeneous(g, sp);
+        std::cout << res;
+    }
 #endif // RUN_FULL_KERNELS
 
     return EXIT_SUCCESS;

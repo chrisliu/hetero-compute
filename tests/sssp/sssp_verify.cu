@@ -38,30 +38,30 @@ int main(int argc, char *argv[]) {
         init_dist[i] = INF_WEIGHT;
     init_dist[source_id] = 0.0f;
 
-    /*{*/
-        /*weight_t *dist = nullptr;*/
-        /*sssp_pull_cpu(g, epoch_sssp_pull_cpu_one_to_one, init_dist, &dist);*/
+    {
+        weight_t *dist = nullptr;
+        sssp_pull_cpu(g, epoch_sssp_pull_cpu_one_to_one, init_dist, &dist);
 
-        /*std::cout << "Verifying SSSP CPU kernel ..." << std::endl;*/
-        /*bool success = verify(oracle_dist, dist, g.num_nodes);*/
-        /*std::cout << " > Verification " << (success ? "succeeded" : "failed")*/
-            /*<< "!" << std::endl;*/
+        std::cout << "Verifying SSSP CPU kernel ..." << std::endl;
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
-        /*delete[] dist;*/
-    /*}*/
+        delete[] dist;
+    }
 
-    /*// Check SSSP GPU naive kernel.*/
-    /*{*/
-        /*weight_t *dist = nullptr;*/
-        /*sssp_pull_gpu(g, epoch_sssp_pull_gpu_one_to_one, init_dist, &dist);*/
+    // Check SSSP GPU naive kernel.
+    {
+        weight_t *dist = nullptr;
+        sssp_pull_gpu(g, epoch_sssp_pull_gpu_one_to_one, init_dist, &dist);
 
-        /*std::cout << "Verifying SSSP GPU naive kernel ..." << std::endl;*/
-        /*bool success = verify(oracle_dist, dist, g.num_nodes);*/
-        /*std::cout << " > Verification " << (success ? "succeeded" : "failed")*/
-            /*<< "!" << std::endl;*/
+        std::cout << "Verifying SSSP GPU naive kernel ..." << std::endl;
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
-        /*delete[] dist;*/
-    /*}*/
+        delete[] dist;
+    }
 
     // Check SSSP GPU warp min kernel.
     {
@@ -76,32 +76,33 @@ int main(int argc, char *argv[]) {
         delete[] dist;
     }
 
-    /*// Check SSSP GPU block min kernel.*/
-    /*{*/
-        /*weight_t *dist = nullptr;*/
-        /*sssp_pull_gpu(g, epoch_sssp_pull_gpu_block_min, init_dist, &dist,*/
-                /*64, 256);*/
+    // Check SSSP GPU block min kernel.
+    {
+        weight_t *dist = nullptr;
+        sssp_pull_gpu(g, epoch_sssp_pull_gpu_block_min, init_dist, &dist,
+                64, 256);
 
-        /*std::cout << "Verifying SSSP GPU block min kernel ..." << std::endl;*/
-        /*bool success = verify(oracle_dist, dist, g.num_nodes);*/
-        /*std::cout << " > Verification " << (success ? "succeeded" : "failed")*/
-            /*<< "!" << std::endl;*/
+        std::cout << "Verifying SSSP GPU block min kernel ..." << std::endl;
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
-        /*delete[] dist;*/
-    /*}*/
+        delete[] dist;
+    }
 
-    /*// Check SSSP heterogeneous kernel.*/
-    /*{*/
-        /*weight_t *dist = nullptr;*/
-        /*sssp_pull_heterogeneous(g, init_dist, &dist);*/
+    // Check SSSP heterogeneous kernel.
+    {
+        enable_all_peer_access();
+        weight_t *dist = nullptr;
+        sssp_pull_heterogeneous(g, init_dist, &dist);
 
-        /*std::cout << "Verifying SSSP heterogeneous kernel ..." << std::endl;*/
-        /*bool success = verify(oracle_dist, dist, g.num_nodes);*/
-        /*std::cout << " > Verification " << (success ? "succeeded" : "failed")*/
-            /*<< "!" << std::endl;*/
+        std::cout << "Verifying SSSP heterogeneous kernel ..." << std::endl;
+        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << " > Verification " << (success ? "succeeded" : "failed")
+            << "!" << std::endl;
 
-        /*delete[] dist;*/
-    /*}*/
+        delete[] dist;
+    }
 
     delete[] oracle_dist;
 
