@@ -17,9 +17,8 @@ def main():
     args = parser.parse_args()
 
     if args.algorithm == 'bfs':
-        print("Handling BFS ...")
+        handle_bfs(args)
     elif args.algorithm == 'sssp':
-        print("Handling SSSP ...")
         handle_sssp(args)
 
 def create_parser() -> argparse.ArgumentParser:
@@ -41,6 +40,20 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument('profiles', type=valid_yaml_file, nargs='+',
                         help="YAML benchmark profiles for devices")
     return parser
+
+def handle_bfs(args: argparse.Namespace) -> None:
+    profiles = load_profiles_bfs(args.profiles)
+
+    epoch_profiles = profiles[0][0] + profiles[0][1]
+    #hardware_config = query_devices(epoch_profiles)
+    hardware_config = {'Intel i7-9700K': 1, 'NVIDIA Quadro RTX 4000': 1}
+
+    epoch_schedules = scheduler.push_pull_scheduler(profiles, hardware_config)
+
+    # Print schedule.
+    for epoch, sched in enumerate(epoch_schedules):
+        print(f"####### Epoch {epoch} #######")
+        scheduler.pprint_schedule(sched)
 
 def handle_sssp(args: argparse.Namespace) -> None:
     # Load profiles and query device counts.
@@ -65,8 +78,8 @@ def handle_sssp(args: argparse.Namespace) -> None:
     scheduler.pprint_schedule(schedule)
 
     # Print speedup against single device.
-    worst_time = max(schedule, key=lambda sched: sched.exec_time).exec_time
-    single_dev_time = s.best_single_device_time()
+    worst_time = worst_device_time(schedule)
+    single_dev_time = s.best_single_device_time
     print(f"Longest device time:     {worst_time:0.2f} ms")
     print(f"Best single device time: {single_dev_time:0.2f} ms")
     print(f"{single_dev_time / worst_time:0.2f}x speedup")
@@ -79,6 +92,56 @@ def handle_sssp(args: argparse.Namespace) -> None:
     with open('sssp.cuh', 'w') as ofs:
         ofs.write(
             scheduler.kernelgen.generate_sssp_hetero_source_code(schedule))
+
+def load_profiles_bfs(fnames: List[str]) -> scheduler.PushPullSchedule:
+    """Returns a list of tuples of device profiles by epochs.
+
+    Returns:
+      The list of device profile @benchmark where @benchmark[i] are the 
+      profiles at epoch i. Profiles for each epoch is represented by a tuple of 
+      device profile lists. The elements of the tuple are the performance of
+      the push and pull kernels, respectively.
+    """
+
+    def get_benchmark_info(fname: str):
+        fname_clean = fname.split('/')[-1].split('.')[0]
+        epoch       = int(fname_clean.split('_')[0][5:])
+        devtype     = fname_clean.split('_')[2]
+
+        if devtype == 'gpu':
+            return (epoch, 'pull')
+        else: # devtype == 'cpu'
+            kertype = fname_clean.split('_')[3]            
+            return (epoch, kertype)
+
+    # Separate filenames by epochs.
+    epoch_profiles = defaultdict(lambda: (defaultdict(list), defaultdict(list)))
+    for fname in fnames:
+        with open(fname, 'r') as ifs:
+            config_results = yaml.full_load(ifs)
+
+        # Save segment execution times as a kernel profile.
+        device_name    = config_results['config']['device']
+        kernel_name    = config_results['config']['kernel']
+        kernel_results = config_results['results'][0]['segments']
+        kernel_execs   = [segment['millis'] for segment in kernel_results]
+        kernel_profile = scheduler.KernelProfile(kernel_name, kernel_execs)
+
+        epoch, kertype = get_benchmark_info(fname)
+        ppidx          = 0 if kertype == 'push' else 1
+        epoch_profiles[epoch][ppidx][device_name].append(kernel_profile)
+
+    # Package Dict["device name", List[KernelProfile]] into List[DeviceProfile]
+    def kerdict_to_devprofs(kerdict: Dict[str, List[scheduler.KernelProfile]])\
+            -> List[scheduler.DeviceProfile]:
+        return [scheduler.DeviceProfile(device_name, kernel_profiles)
+                for device_name, kernel_profiles in kerdict.items()]
+
+    profiles = [
+        tuple(kerdict_to_devprofs(kerdict) for kerdict in epoch_profiles[epoch])
+        for epoch in range(len(epoch_profiles))
+    ]
+    return profiles
 
 def load_profiles_sssp(fnames: List[str]) -> List[scheduler.DeviceProfile]:
     """Returns contents of profile files."""
@@ -114,10 +177,12 @@ def query_devices(profiles: List[scheduler.DeviceProfile]) -> Dict[str, int]:
             except:
                 print("(!) Please enter an integer.")
 
+    devices = {devprof.device_name for devprof in profiles}
+    devices = sorted(devices)
+
     hardware_config = dict()
-    for devprof in profiles:
-        devname = devprof.device_name
-        count   = valid_count(devname)
+    for devname in devices:
+        count = valid_count(devname)
         if count: # Only add device if count > 0.
             hardware_config[devname] = count
     return hardware_config
@@ -154,6 +219,10 @@ def write_schedule(schedule: List[scheduler.DeviceSchedule], fname: str):
             for seg in devsched.schedule:
                 ofs.write(f'{seg.seg_start} {seg.seg_end}\n')
                 ofs.write(f'{seg.kernel_name}\n')
+
+def worst_device_time(schedule: List[scheduler.DeviceSchedule]) -> float:
+    worst_time = max(schedule, key=lambda sched: sched.exec_time).exec_time
+    return worst_time
 
 if __name__ == '__main__':
     main()

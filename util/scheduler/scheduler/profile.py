@@ -32,3 +32,6 @@ class DeviceProfile:
 
     def __repr__(self) -> str:
         return f'DeviceProfile(device={self.device_name})'
+
+PushPullEpochSchedule = Tuple[List[DeviceProfile], List[DeviceProfile]]
+PushPullSchedule      = List[PushPullEpochSchedule]

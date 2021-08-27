@@ -4,9 +4,9 @@ from __future__ import annotations
 import copy
 from typing import *
 
-################################################################################
-##### Data Structures ##########################################################
-################################################################################
+###############################################################################
+##### Data Structures #########################################################
+###############################################################################
 
 class KernelSegment:
     """POD that contains a kernel and a segment."""
@@ -37,9 +37,9 @@ class DeviceSchedule:
     def __repr__(self) -> str:
         return f'DeviceSchedule(device={self.device_name})'
 
-################################################################################
-##### Schedulers ###############################################################
-################################################################################
+###############################################################################
+##### Schedulers ##############################################################
+###############################################################################
 
 class Scheduler:
     def schedule(self, config: Dict[str, int], metric: Metric) \
@@ -229,6 +229,7 @@ class MostGainScheduler:
                                                 self.device_best[devfrom])
                 ]
 
+    @property
     def best_single_device_time(self) -> float:
         best_proc = min(self.device_exec.items(), key=lambda t: t[1])[0]
         return self.device_exec[best_proc]
@@ -394,9 +395,57 @@ class MostGainScheduler:
                 zip(scheds[device][1:][::-1], scheds[device][:-1][::-1]):
             balance(from_dev, to_dev)
 
-################################################################################
-##### Helper functions #########################################################
-################################################################################
+###############################################################################
+##### Kernel Specific Scheduler ###############################################
+###############################################################################
+
+def push_pull_scheduler(profiles: PushPullSchedule,
+                        config: Dict[str, int]) -> List[List[DeviceSchedule]]:
+    def schedule_epoch(ppprofile: PushPullEpochSchedule) -> List[DeviceSchedule]:
+        push_prof, pull_prof = ppprofile
+
+        # Schedule pull schedule.
+        s = MostGainScheduler(pull_prof)
+        schedule = s.schedule(config)
+
+        # Figure out optimal push device+kernel.
+        # TODO: only compatible with CPU kernels.
+        def schedule_cpu_push(dev_name: str, kernel: KernelProfile) \
+                -> List[DeviceSchedule]:
+            num_segments = len(pull_prof[0].kernel_profiles[0])
+
+            # Setup push device.
+            schedule = [DeviceSchedule(dev_name)]
+            schedule[0].schedule = [
+                KernelSegment(kernel.kernel_name, seg, kernel[0] / num_segments)
+                for seg in range(num_segments)
+            ]
+            schedule[0].exec_time = kernel[0]
+
+            # Set other devices.
+            other_devices = {dev: count if dev != dev_name else count - 1
+                             for dev, count in config.items()}
+            for other_dev_name, count in other_devices.items():
+                for _ in range(count):
+                    schedule.append(DeviceSchedule(other_dev_name))
+
+            return schedule
+
+        best_time = max(schedule, key=lambda sched: sched.exec_time).exec_time
+
+        for devprof in push_prof:
+            for kerprof in devprof.kernel_profiles:
+                if kerprof[0] < best_time:
+                    best_time = kerprof[0]
+                    schedule = schedule_cpu_push(devprof.device_name, kerprof)
+
+        return schedule
+
+    return [schedule_epoch(ppprofile) for ppprofile in profiles]
+
+###############################################################################
+##### Helper functions ########################################################
+###############################################################################
 
 def pprint_schedule(schedule: List[DeviceSchedule]):
     num_devices     = len(schedule)
