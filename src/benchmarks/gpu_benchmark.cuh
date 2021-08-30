@@ -268,6 +268,7 @@ segment_res_t BFSGPUTreeBenchmark::benchmark_segment(const nid_t start_id,
     // Free memory.
     CUDA_ERRCHK(cudaFree(cu_index));
     CUDA_ERRCHK(cudaFree(cu_neighbors));
+    CUDA_ERRCHK(cudaFree(cu_parents));
 
     CUDA_ERRCHK(cudaEventDestroy(start_t));
     CUDA_ERRCHK(cudaEventDestroy(stop_t));
