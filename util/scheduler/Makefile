@@ -1,4 +1,4 @@
-BFS_PROFILE_DIR  = profiles/i7_quadro/bfs/scale23
+BFS_PROFILE_DIR  = profiles/i7_quadro/bfs/scale25
 SSSP_PROFILE_DIR = profiles/i7_quadro/sssp/scale23
 
 .PHONY: all

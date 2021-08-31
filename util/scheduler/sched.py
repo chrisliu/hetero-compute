@@ -51,9 +51,12 @@ def handle_bfs(args: argparse.Namespace) -> None:
     epoch_schedules = scheduler.push_pull_scheduler(profiles, hardware_config)
 
     # Print schedule.
+    total_time = 0
     for epoch, sched in enumerate(epoch_schedules):
         print(f"####### Epoch {epoch} #######")
-        scheduler.pprint_schedule(sched)
+        scheduler.pprint_schedule(sched[0])
+        total_time += worst_device_time(sched[0])
+    print(f"Total time: {total_time} ms")
 
 def handle_sssp(args: argparse.Namespace) -> None:
     # Load profiles and query device counts.

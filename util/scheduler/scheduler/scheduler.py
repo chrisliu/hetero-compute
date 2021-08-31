@@ -402,11 +402,18 @@ class MostGainScheduler:
 def push_pull_scheduler(profiles: PushPullSchedule,
                         config: Dict[str, int]) -> List[List[DeviceSchedule]]:
     def schedule_epoch(ppprofile: PushPullEpochSchedule) -> List[DeviceSchedule]:
+        """Emits BFS schedule for this epoch.
+
+        Schedule is either a push-/pull-only.
+
+        Returns:
+          Schedule in the form of a tuple (schedule list, 'push' or 'pull')
+        """
         push_prof, pull_prof = ppprofile
 
         # Schedule pull schedule.
         s = MostGainScheduler(pull_prof)
-        schedule = s.schedule(config)
+        schedule = (s.schedule(config), 'pull')
 
         # Figure out optimal push device+kernel.
         # TODO: only compatible with CPU kernels.
@@ -431,13 +438,13 @@ def push_pull_scheduler(profiles: PushPullSchedule,
 
             return schedule
 
-        best_time = max(schedule, key=lambda sched: sched.exec_time).exec_time
+        best_time = max(schedule[0], key=lambda sched: sched.exec_time).exec_time
 
         for devprof in push_prof:
             for kerprof in devprof.kernel_profiles:
                 if kerprof[0] < best_time:
                     best_time = kerprof[0]
-                    schedule = schedule_cpu_push(devprof.device_name, kerprof)
+                    schedule = (schedule_cpu_push(devprof.device_name, kerprof), 'push')
 
         return schedule
 

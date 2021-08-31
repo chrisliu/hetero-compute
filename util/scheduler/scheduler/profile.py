@@ -34,4 +34,4 @@ class DeviceProfile:
         return f'DeviceProfile(device={self.device_name})'
 
 PushPullEpochSchedule = Tuple[List[DeviceProfile], List[DeviceProfile]]
-PushPullSchedule      = List[PushPullEpochSchedule]
+PushPullSchedule      = List[Tuple[PushPullEpochSchedule, str]]
