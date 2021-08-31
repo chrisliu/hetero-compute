@@ -155,12 +155,6 @@ void cu_cpu_set_bit(Bitmap * const cu_bitmap, const std::size_t idx) {
                 sizeof(data_t), cudaMemcpyHostToDevice));
 }
 
-__host__ inline
-bool cpu_to_gpu_copy(const Bitmap * const from, Bitmap * const cu_cpu_bitmap) {
-    CUDA_ERRCHK(cudaMemcpy(cu_cpu_bitmap->buffer, from->buffer,
-                from->size * sizeof(data_t), cudaMemcpyHostToDevice));
-}
-
 /**
  * Converts cu_cpu_constructor bitmap into GPU-only bitmap object.
  * Parameters:
