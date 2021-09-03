@@ -309,6 +309,40 @@ void BFSGPUTreeBenchmark::copy_parents(nid_t * const cu_parents) {
  ***** Kernel Benchmark Implementations **************************************
  *****************************************************************************/
 
+segment_res_t benchmark_bfs_gpu(
+        const CSRUWGraph &g,
+        bfs_gpu_epoch_func epoch_kernel,
+        SourcePicker<CSRUWGraph> &sp,
+        int block_size, int thread_count
+) {
+    // Initialize results and calculate segment properties.
+    segment_res_t result;
+    result.start_id   = 0;
+    result.end_id     = g.num_nodes;
+    result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
+    result.num_edges  = g.num_edges;
+
+    nid_t *parents;
+
+    // Run kernel!
+    double total_time = 0.0;
+    for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
+        nid_t cur_source = sp.next_vertex();
+
+        total_time += bfs_gpu(g, cur_source, &parents, epoch_kernel,
+                block_size, thread_count);
+
+        delete[] parents;
+    }
+
+    // Save results.
+    result.millisecs = total_time / BENCHMARK_FULL_TIME_ITERS;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
+    // TODO: divided by 2 is a conservative estimate.
+
+    return result;
+}
+
 segment_res_t benchmark_sssp_gpu(
         const CSRWGraph &g, 
         sssp_gpu_epoch_func epoch_kernel,
@@ -341,40 +375,6 @@ segment_res_t benchmark_sssp_gpu(
         total_time += sssp_pull_gpu(g, epoch_kernel, init_dist, &ret_dist,
                 block_size, thread_count);
         delete[] ret_dist;
-    }
-
-    // Save results.
-    result.millisecs = total_time / BENCHMARK_FULL_TIME_ITERS;
-    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
-    // TODO: divided by 2 is a conservative estimate.
-
-    return result;
-}
-
-segment_res_t benchmark_bfs_gpu(
-        const CSRUWGraph &g,
-        bfs_gpu_epoch_func epoch_kernel,
-        SourcePicker<CSRUWGraph> &sp,
-        int block_size, int thread_count
-) {
-    // Initialize results and calculate segment properties.
-    segment_res_t result;
-    result.start_id   = 0;
-    result.end_id     = g.num_nodes;
-    result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
-    result.num_edges  = g.num_edges;
-
-    nid_t *parents;
-
-    // Run kernel!
-    double total_time = 0.0;
-    for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
-        nid_t cur_source = sp.next_vertex();
-
-        total_time += bfs_gpu(g, cur_source, &parents, epoch_kernel,
-                block_size, thread_count);
-
-        delete[] parents;
     }
 
     // Save results.

@@ -11,6 +11,7 @@
 #include "../../src/graph.cuh"
 #include "../../src/kernels/cpu/bfs.cuh"
 #include "../../src/kernels/gpu/bfs.cuh"
+#include "../../src/kernels/heterogeneous/bfs.cuh"
 
 /** Forward decl. */
 void verify(const CSRUWGraph &g, 
@@ -98,6 +99,15 @@ int main(int argc, char *argv[]) {
             [&](){
                 nid_t *parents = nullptr;
                 bfs_gpu(g, source_id, &parents, epoch_bfs_sync_pull_gpu_warp);
+                return parents;
+            }
+    );
+
+    // Check BFS heterogeneous kernel.
+    verify(g, depths, source_id, "BFS heterogeneous",
+            [&](){
+                nid_t *parents = nullptr;
+                bfs_do_heterogeneous(g, source_id, &parents);
                 return parents;
             }
     );

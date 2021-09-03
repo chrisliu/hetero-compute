@@ -14,7 +14,7 @@
 #include "../../util.h"
 #include "../../window.h"
 
-const int num_gpus = 1;
+const int num_gpus_bfs = 1;
 
 double bfs_do_heterogeneous(
         const CSRUWGraph &g, const nid_t source_id, nid_t ** const ret_parents
@@ -22,12 +22,12 @@ double bfs_do_heterogeneous(
     // Setup GPU streams.
     // idx = from_dev * num_devs + to_dev;
     // when from_dev == to_dev, this is the CPU stream (both ways).
-    // GPUs are devices 0 ... num_gpus - 1
-    // when CPU is enabled, CPU is device num_gpus.
-    constexpr int num_devs = num_gpus + 1; // CPU is enabled.
-    constexpr int cpu_id   = num_gpus;
+    // GPUs are devices 0 ... num_gpus_bfs - 1
+    // when CPU is enabled, CPU is device num_gpus_bfs.
+    constexpr int num_devs = num_gpus_bfs + 1; // CPU is enabled.
+    constexpr int cpu_id   = num_gpus_bfs;
     cudaStream_t memcpy_streams[num_devs * num_devs];
-    for (int from = 0; from < num_gpus; from++) { 
+    for (int from = 0; from < num_gpus_bfs; from++) { 
         CUDA_ERRCHK(cudaSetDevice(from));
         // GPU->CPU/GPU streams.
         for (int to = 0; to < num_devs; to++) 
@@ -43,44 +43,44 @@ double bfs_do_heterogeneous(
         parents[i] = INVALID_NODE;
     parents[source_id] = source_id;
 
-    nid_t *cu_parents[num_gpus];
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    nid_t *cu_parents[num_gpus_bfs];
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
         CUDA_ERRCHK(cudaMalloc((void **) &cu_parents[gpu], g.num_nodes * sizeof(nid_t)));
     }
 
     nid_t num_nodes;
     nid_t num_edges;
-    nid_t gpu_num_nodes[num_gpus];
-    nid_t *cu_num_nodes[num_gpus];
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    nid_t gpu_num_nodes[num_gpus_bfs];
+    nid_t *cu_num_nodes[num_gpus_bfs];
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
-        CUDA_ERRCHK(cudaMalloc((void **) &cu_num_nodes[gpu], sizeof(nid_t))):
+        CUDA_ERRCHK(cudaMalloc((void **) &cu_num_nodes[gpu], sizeof(nid_t)));
     }
 
     // Setup frontier data structures.
     SlidingWindow<nid_t> push_frontier(g.num_nodes);
-    Bitmap::Bitmap *pull_frontier      = Bitmap::constructor(g.num_nodes);
-    Bitmap::Bitmap *pull_next_frontier = Bitmap::constructor(g.num_nodes);
+    Bitmap::Bitmap *pull_frontier      = Bitmap::constructor(g.num_nodes, true);
+    Bitmap::Bitmap *pull_next_frontier = Bitmap::constructor(g.num_nodes, true);
 
-    Bitmap::Bitmap *gpu_pull_frontiers[num_gpus];      // CPU-copies of GPU frontier.
-    Bitmap::Bitmap *gpu_pull_next_frontiers[num_gpus]; // CPU-copies of GPU frontier.
-    Bitmap::Bitmap *cu_pull_frontiers[num_gpus];       // GPU frontier objects.
-    Bitmap::Bitmap *cu_pull_next_frontiers[num_gpus];  // GPU frontier objects.
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
-        gpu_pull_frontiers[gpu]      = Bitmap::gpu_constructor(g.num_nodes);
-        gpu_pull_next_frontiers[gpu] = Bitmap::gpu_constructor(g.num_nodes);        
+    Bitmap::Bitmap *gpu_pull_frontiers[num_gpus_bfs];      // CPU-copies of GPU frontier.
+    Bitmap::Bitmap *gpu_pull_next_frontiers[num_gpus_bfs]; // CPU-copies of GPU frontier.
+    Bitmap::Bitmap *cu_pull_frontiers[num_gpus_bfs];       // GPU frontier objects.
+    Bitmap::Bitmap *cu_pull_next_frontiers[num_gpus_bfs];  // GPU frontier objects.
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
+        gpu_pull_frontiers[gpu]      = Bitmap::cu_cpu_constructor(g.num_nodes);
+        gpu_pull_next_frontiers[gpu] = Bitmap::cu_cpu_constructor(g.num_nodes);        
         cu_pull_frontiers[gpu]       = Bitmap::cu_constructor(gpu_pull_frontiers[gpu]);
         cu_pull_next_frontiers[gpu]  = Bitmap::cu_constructor(gpu_pull_next_frontiers[gpu]);
     }
 
     // Copy graph to GPUs.
     // TODO: replace this in compiler.
-    constexpr int num_blocks = num_gpus; // Arbitrary.
+    constexpr int num_blocks = num_gpus_bfs; // Arbitrary.
     offset_t *cu_indices[num_blocks];
     nid_t    *cu_neighbors[num_blocks];
 
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
         copy_subgraph_to_device(g, &cu_indices[gpu], &cu_neighbors[gpu],
                 0, g.num_nodes);
@@ -107,16 +107,20 @@ double bfs_do_heterogeneous(
     // Run GPU pull for the next 4 epochs.
     // Convert sliding window -> bitmap. Copy bitmap CPU -> GPU.
     conv_window_to_bitmap(push_frontier, pull_frontier);
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
-        CUDA_ERRCHK(cudaMemcpy(gpu_pull_frontiers[gpu]->buffer, pull_frontier->buffer, 
+        CUDA_ERRCHK(cudaMemcpyAsync(
+                    gpu_pull_frontiers[gpu]->buffer, pull_frontier->buffer, 
                     pull_frontier->size * sizeof(Bitmap::data_t),
-                    cudaMemcpyHostToDevice, memcpy_streams[cpu_id * num_devs + gpu])):
-        CUDA_ERRCHK(cudaMemcpy(cu_parents[gpu], parents, 
+                    cudaMemcpyHostToDevice, 
+                    memcpy_streams[cpu_id * num_devs + gpu]));
+        CUDA_ERRCHK(cudaMemcpyAsync(
+                    cu_parents[gpu], parents, 
                     g.num_nodes * sizeof(nid_t),
-                    cudaMemcpyHostToDevice, memcpy_streams[cpu_id * num_devs + gpu]));
+                    cudaMemcpyHostToDevice, 
+                    memcpy_streams[cpu_id * num_devs + gpu]));
     }
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
         CUDA_ERRCHK(cudaStreamSynchronize(memcpy_streams[cpu_id * num_devs + gpu]));
     }
@@ -125,9 +129,11 @@ double bfs_do_heterogeneous(
     for (int epoch = 2; epoch <= 6; epoch++) {
         constexpr int this_gpu = 0;
         CUDA_ERRCHK(cudaMemset(cu_num_nodes[this_gpu], 0, sizeof(nid_t)));
-        epoch_bfs_pull_gpu_one_to_one(cu_indices[this_gpu], cu_neighbors[this_gpu],
+        epoch_bfs_pull_gpu_one_to_one<<<256, 1024>>>(
+                cu_indices[this_gpu], cu_neighbors[this_gpu],
                 cu_parents[this_gpu], this_gpu, g.num_nodes, 
-                cu_pull_frontiers[this_gpu], cu_pull_next_frontiers[this_gpu], cu_num_nodes[this_gpu]);
+                cu_pull_frontiers[this_gpu], cu_pull_next_frontiers[this_gpu], 
+                cu_num_nodes[this_gpu]);
         std::swap(gpu_pull_frontiers[this_gpu], gpu_pull_next_frontiers[this_gpu]);
         std::swap(cu_pull_frontiers[this_gpu], cu_pull_next_frontiers[this_gpu]);
         Bitmap::cu_cpu_reset(gpu_pull_next_frontiers[this_gpu]);
@@ -136,36 +142,36 @@ double bfs_do_heterogeneous(
     // Run CPU push by node for the remaining epochs.
     // Copy parents array & bitmap.
     Bitmap::reset(pull_frontier);
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
         CUDA_ERRCHK(cudaMemcpyAsync(parents, cu_parents[gpu],
                     g.num_nodes * sizeof(nid_t), cudaMemcpyDeviceToHost,
                     memcpy_streams[gpu * num_devs + cpu_id]));
         CUDA_ERRCHK(cudaMemcpyAsync(
                     pull_frontier->buffer, gpu_pull_frontiers[gpu]->buffer, 
-                    gpu_pull_frontier->size * sizeof(nid_t),
+                    gpu_pull_frontiers[gpu]->size * sizeof(nid_t),
                     cudaMemcpyDeviceToHost, memcpy_streams[gpu * num_devs + cpu_id]));
     }
 
     // Check number of nodes processed by last epoch.
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
         // Borrow CPU->GPU stream (so parents & froniter copy could be async 
         // num_nodes updating).
-        CUDA_ERRCHK(cudaMemcpyAsync(&gpu_num_nodes[gpu], cu_num_nodes[gpu]),
+        CUDA_ERRCHK(cudaMemcpyAsync(&gpu_num_nodes[gpu], cu_num_nodes[gpu],
                 sizeof(nid_t), cudaMemcpyDeviceToHost, 
-                memcpy_streams[cpu_id * num_devs + gpu]);
+                memcpy_streams[cpu_id * num_devs + gpu]));
     }
     
     num_nodes = 0;
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
-        CUDA_ERCRHK(cudaStreamSynchronize(memcpy_streams[cpu_id * num_devs + gpu]));
+        CUDA_ERRCHK(cudaStreamSynchronize(memcpy_streams[cpu_id * num_devs + gpu]));
         num_nodes += gpu_num_nodes[gpu];
     }
 
     // Sync parents & frontier copy.
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
         CUDA_ERRCHK(cudaStreamSynchronize(memcpy_streams[gpu * num_devs + cpu_id]));
     }
@@ -173,12 +179,12 @@ double bfs_do_heterogeneous(
     // Remaining epochs.
     if (num_nodes != 0) {
         // Convert to window.
-        conv_bitmap_to_window(pull_frontier, push_frontier);
+        conv_bitmap_to_window(pull_frontier, push_frontier, g.num_nodes);
 
-        while (not frontier.empty()) {
+        while (not push_frontier.empty()) {
             num_edges = 0;
             epoch_bfs_push_cpu_by_node(g, parents, push_frontier, num_edges);
-            frontier.slide_window();
+            push_frontier.slide_window();
         }
     }
     timer.Stop();
@@ -190,7 +196,7 @@ double bfs_do_heterogeneous(
     Bitmap::destructor(&pull_frontier);
     Bitmap::destructor(&pull_next_frontier);
     
-    for (int gpu = 0; gpu < num_gpus; gpu++) {
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
         CUDA_ERRCHK(cudaSetDevice(gpu));
 
         // Streams.
@@ -205,6 +211,12 @@ double bfs_do_heterogeneous(
         Bitmap::cu_cpu_destructor(&gpu_pull_next_frontiers[gpu]);
         Bitmap::cu_destructor(&cu_pull_frontiers[gpu]);
         Bitmap::cu_destructor(&cu_pull_next_frontiers[gpu]);
+    }
+
+    for (int gpu = 0; gpu < num_gpus_bfs; gpu++) {
+        CUDA_ERRCHK(cudaSetDevice(gpu));
+        CUDA_ERRCHK(cudaFree(cu_indices[gpu]));
+        CUDA_ERRCHK(cudaFree(cu_neighbors[gpu]));
     }
 
     return timer.Millisecs();

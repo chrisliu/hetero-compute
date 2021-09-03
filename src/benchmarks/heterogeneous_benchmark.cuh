@@ -6,14 +6,14 @@
 #define SRC_BENCHMARKS__HETEROGENEOUS_BENCHMARK_CUH
 
 #include "../graph.cuh"
+#include "../kernels/heterogeneous/bfs.cuh"
 #include "../kernels/heterogeneous/sssp.cuh"
 
 /**
  * Benchmarks a full SSSP heterogeneous run.
  * Parameters:
- *   - g                <- graph.
- *   - init_dist        <- initial distance array.
- *   - ret_dist         <- pointer to the address of the return distance array.
+ *   - g   <- graph.
+ *   - sp  <- source node picker.
  * Returns:
  *   Execution results.
  */
@@ -46,6 +46,44 @@ segment_res_t benchmark_sssp_heterogeneous(const CSRWGraph &g,
         total_time += sssp_pull_heterogeneous(g, init_dist, &ret_dist);
 
         delete[] ret_dist;
+    }
+
+    // Save results.
+    result.millisecs = total_time / BENCHMARK_FULL_TIME_ITERS;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
+    // TODO: divided by 2 is a conservative estimate.
+
+    return result;
+}
+
+/**
+ * Benchmarks a full BFS heterogeneous run.
+ * Parameters:
+ *   - g <- graph.
+ *   - sp <- source node picker.
+ * Returns:
+ *   Execution results.
+ */
+segment_res_t benchmark_bfs_heterogeneous(const CSRUWGraph &g,
+        SourcePicker<CSRUWGraph> sp
+) {
+    // Initialize results and calculate segment properties.
+    segment_res_t result;
+    result.start_id   = 0;
+    result.end_id     = g.num_nodes;
+    result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
+    result.num_edges  = g.num_edges;
+
+    nid_t *parents;
+
+    // Run kernel!
+    double total_time = 0.0;
+    for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
+        nid_t cur_source = sp.next_vertex();
+
+        total_time += bfs_do_heterogeneous(g, cur_source, &parents);
+
+        delete[] parents;
     }
 
     // Save results.

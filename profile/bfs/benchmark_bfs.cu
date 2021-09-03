@@ -26,9 +26,9 @@
 // Save results to YAML files.
 #define SAVE_RESULTS
 // Run epoch kernels.
-#define RUN_EPOCH_KERNELS
+/*#define RUN_EPOCH_KERNELS*/
 // Run full kernels.
-/*#define RUN_FULL_KERNELS*/
+#define RUN_FULL_KERNELS
 
 #ifdef ONLY_LAYER
 // Number of segments (NOT depth).
@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
     sp.reset();
     {
         std::cout << "BFS CPU push by node:" << std::endl;
-        segment_res_t res = benchmark_bfs_cpu(g, 
+        segment_res_t res = benchmark_bfs_cpu(g,
                 bfs_push_cpu<epoch_bfs_push_cpu_by_node>, sp);
         std::cout << res;
     }
@@ -194,7 +194,7 @@ int main(int argc, char *argv[]) {
     sp.reset();
     {
         std::cout << "BFS CPU push by edge:" << std::endl;
-        segment_res_t res = benchmark_bfs_cpu(g, 
+        segment_res_t res = benchmark_bfs_cpu(g,
                 bfs_push_cpu<epoch_bfs_push_cpu_by_edge>, sp);
         std::cout << res;
     }
@@ -236,7 +236,7 @@ int main(int argc, char *argv[]) {
     // Run GPU sync warp kernel.
     sp.reset();
     {
-        std::cout << "BFS GPU sync warp (sync_iters = 1):" 
+        std::cout << "BFS GPU sync warp (sync_iters = 1):"
             << std::endl;
         segment_res_t res = benchmark_bfs_gpu(g,
                 epoch_bfs_sync_pull_gpu_warp<1>, sp, NUM_BLOCKS, 1024);
@@ -245,7 +245,7 @@ int main(int argc, char *argv[]) {
 
     sp.reset();
     {
-        std::cout << "BFS GPU sync warp (sync_iters = 2):" 
+        std::cout << "BFS GPU sync warp (sync_iters = 2):"
             << std::endl;
         segment_res_t res = benchmark_bfs_gpu(g,
                 epoch_bfs_sync_pull_gpu_warp<2>, sp, NUM_BLOCKS, 1024);
@@ -254,7 +254,7 @@ int main(int argc, char *argv[]) {
 
     sp.reset();
     {
-        std::cout << "BFS GPU sync warp (sync_iters = 3):" 
+        std::cout << "BFS GPU sync warp (sync_iters = 3):"
             << std::endl;
         segment_res_t res = benchmark_bfs_gpu(g,
                 epoch_bfs_sync_pull_gpu_warp<3>, sp, NUM_BLOCKS, 1024);
@@ -262,13 +262,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Run heterogeneous kernel.
-    /*sp.reset();*/
-    /*{*/
-        /*// Load in schedule.*/
-        /*std::cout << "SSSP heterogeneous:" << std::endl;*/
-        /*segment_res_t res = benchmark_sssp_heterogeneous(g, sp);*/
-        /*std::cout << res;*/
-    /*}*/
+    sp.reset();
+    {
+        // Load in schedule.
+        std::cout << "BFS heterogeneous:" << std::endl;
+        segment_res_t res = benchmark_bfs_heterogeneous(g, sp);
+        std::cout << res;
+    }
 #endif // RUN_FULL_KERNELS
 
     return EXIT_SUCCESS;
