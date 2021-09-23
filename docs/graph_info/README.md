@@ -7,7 +7,7 @@ A guide to Kronecker graphs and the technical implementation in this project.
 ## Social Network Graphs & Kronecker Graphs
 Kronecker graphs are synthetic graphs designed to resemble social network graphs. 
 
-![Power Law Distribution](https://mathinsight.org/media/image/image/power_law_degree_distribution_scatter.png)
+![Power Law Distribution](https://user-images.githubusercontent.com/4005628/134578552-2501791e-3e05-4454-b784-1317475001e1.png)
 
 These graphs are characterized by the power law distribution. That means there are a lot of nodes with very low degrees and few nodes with very high degrees. The above image demonstrates this (note it's in log scale). Imagine the number of Twitter followers a celebrity like Obama has compared to Chris (none in this case :) ).
 
