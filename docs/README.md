@@ -1,5 +1,7 @@
 # Documentation
 
+*Updated: September 23, 2021*
+
 ## Toolflow
 Getting a kernel running from start to finish.
 1. Generate/Convert graph into serial graph `.sg` or weighted serial graph `.wsg` for BFS and SSSP respectively.

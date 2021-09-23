@@ -1,4 +1,7 @@
 # Benchmarking
+
+*Updated: September 23, 2021*
+
 The same code drives the micro-benchmarks and the Graph500 official benchmark.
 
 ## Micro-Benchmarks

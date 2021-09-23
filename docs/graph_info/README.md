@@ -1,9 +1,14 @@
 # All About Graphs (not really!)
+
+*Updated: September 23, 2021*
+
 A guide to Kronecker graphs and the technical implementation in this project.
 
 ## Social Network Graphs & Kronecker Graphs
 Kronecker graphs are synthetic graphs designed to resemble social network graphs. 
+
 ![Power Law Distribution](https://mathinsight.org/media/image/image/power_law_degree_distribution_scatter.png)
+
 These graphs are characterized by the power law distribution. That means there are a lot of nodes with very low degrees and few nodes with very high degrees. The above image demonstrates this (note it's in log scale). Imagine the number of Twitter followers a celebrity like Obama has compared to Chris (none in this case :) ).
 
 To generate Kronecker graphs, we are piggybacking off of Scott Beamer's [GAP Benchmark Suite](https://github.com/sbeamer/gapbs/) which uses a R-MAT generator with the parameters supplied by the [Graph500 specification](https://graph500.org/?page_id=12). We only care about two things, the scale of the graph `scale` and the average degree `edgefactor`. Our generated graph will have `2^{scale}` number of nodes and `2^{scale} * edgefactor` number of edges. 
