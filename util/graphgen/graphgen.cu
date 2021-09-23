@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 
-#include "../../src/gapbs/gapbs.h"
+#include "../../src/gapbs/gapbs.cuh"
 #include "../../src/util.h"
 
 #define WEIGHTED_ON
