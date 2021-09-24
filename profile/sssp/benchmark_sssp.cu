@@ -40,8 +40,8 @@
 
 #define NUM_BLOCKS 256
 
-#define DEVCPU Device::intel_xeon_e5_2686
-#define DEVGPU Device::nvidia_tesla_k80
+#define DEVCPU Device::intel_i7_9700K
+#define DEVGPU Device::nvidia_quadro_rtx_4000
 
 /*****************************************************************************
  ***** Helper Functions ******************************************************

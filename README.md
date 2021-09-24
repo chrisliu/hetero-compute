@@ -1,4 +1,7 @@
 # Graph Processing with Heterogeneous Processors
+
+*Updated: September 23, 2021*
+
 Exploring graph algorithm execution across heterogeneous processors.
 
 ## Documentation
