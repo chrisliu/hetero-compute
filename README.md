@@ -5,7 +5,7 @@
 Exploring graph algorithm execution across heterogeneous processors.
 
 ## Documentation
-Find documentation under the [docs](https://github.com/chrisliu/hetero-compute/tree/master/docs).  For help, contact Chris on Slack or at [chrisliu@cs.ucla.edu](mailto:chrisliu@cs.ucla.edu).
+Find documentation under the [wiki](https://github.com/chrisliu/hetero-compute/wiki).  For further help, contact Chris on Slack or at [chrisliu@cs.ucla.edu](mailto:chrisliu@cs.ucla.edu).
 
 ## Goals
  - [x] Graph generation and I/O.
