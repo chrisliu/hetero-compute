@@ -37,6 +37,8 @@ struct segment_res_t {
     nid_t       start_id;         // Starting node id.
     nid_t       end_id;           // Ending node id (exclusive).
     float       avg_degree;       // Average degree of segment.
+    float       min_degree;       // Minimum degree of segment.
+    float       max_degree;       // Maximum degree of segment.
     offset_t    num_edges;        // Total number of edges in this subgraph. 
     double      millisecs;        // Execution time.  
     double      gteps;            // GTEPS.
@@ -156,6 +158,8 @@ std::ostream& operator<<(std::ostream &os, const segment_res_t &res) {
        << "  - start: " << res.start_id << std::endl
        << "    end: " << res.end_id << std::endl
        << "    avg_deg: " << res.avg_degree << std::endl
+       << "    min_deg: " << res.min_degree << std::endl
+       << "    max_deg: " << res.max_degree << std::endl
        << "    num_edges: " << res.num_edges << std::endl
        << "    millis: " << res.millisecs << std::endl
        << "    gteps: " << res.gteps << std::endl;
@@ -182,6 +186,8 @@ std::ostream &operator<<(std::ostream &os, const layer_res_t &res) {
         os << "      - start: " << cur_seg.start_id << std::endl
            << "        end: " << cur_seg.end_id << std::endl
            << "        avg_deg: " << cur_seg.avg_degree << std::endl
+           << "        min_deg: " << cur_seg.min_degree << std::endl
+           << "        max_deg: " << cur_seg.max_degree << std::endl
            << "        num_edges: " << cur_seg.num_edges << std::endl
            << "        millis: " << cur_seg.millisecs << std::endl
            << "        gteps: " << cur_seg.gteps << std::endl;
@@ -210,6 +216,8 @@ std::ostream& operator<<(std::ostream &os, const tree_res_t &res) {
                << "      - start: " << cur_seg.start_id << std::endl
                << "        end: " << cur_seg.end_id << std::endl
                << "        avg_deg: " << cur_seg.avg_degree << std::endl
+               << "        min_deg: " << cur_seg.min_degree << std::endl
+               << "        max_deg: " << cur_seg.max_degree << std::endl
                << "        num_edges: " << cur_seg.num_edges << std::endl
                << "        millis: " << cur_seg.millisecs << std::endl
                << "        gteps: " << cur_seg.gteps << std::endl;

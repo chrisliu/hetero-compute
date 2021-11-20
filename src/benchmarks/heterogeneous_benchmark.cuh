@@ -27,6 +27,18 @@ segment_res_t benchmark_sssp_heterogeneous(const CSRWGraph &g,
     result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
     result.num_edges  = g.num_edges;
 
+    /*// Compute min and max degree.*/
+    /*float min_degree, max_degree;*/
+    /*min_degree = max_degree = static_cast<float>(g.index[1] - g.index[0]);*/
+    /*#pragma omp parallel for reduction(min:min_degree) reduction(max:max_degree)*/
+    /*for (int nid = 1; nid < g.num_nodes; nid++) {*/
+        /*float ndeg = static_cast<float>(g.index[nid + 1] - g.index[nid]);*/
+        /*min_degree = min(min_degree, ndeg);*/
+        /*max_degree = max(max_degree, ndeg);*/
+    /*}*/
+    result.min_degree = 0;
+    result.max_degree = 0;
+
     // Define initial and return distances.
     weight_t *init_dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
@@ -73,6 +85,18 @@ segment_res_t benchmark_bfs_heterogeneous(const CSRUWGraph &g,
     result.end_id     = g.num_nodes;
     result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
     result.num_edges  = g.num_edges;
+
+    /*// Compute min and max degree.*/
+    /*float min_degree, max_degree;*/
+    /*min_degree = max_degree = static_cast<float>(g.index[1] - g.index[0]);*/
+    /*#pragma omp parallel for reduction(min:min_degree) reduction(max:max_degree)*/
+    /*for (int nid = 1; nid < g.num_nodes; nid++) {*/
+        /*float ndeg = static_cast<float>(g.index[nid + 1] - g.index[nid]);*/
+        /*min_degree = min(min_degree, ndeg);*/
+        /*max_degree = max(max_degree, ndeg);*/
+    /*}*/
+    result.min_degree = 0;
+    result.max_degree = 0;
 
     nid_t *parents;
 

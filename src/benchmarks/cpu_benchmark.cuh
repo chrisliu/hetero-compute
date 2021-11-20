@@ -76,6 +76,19 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(
     result.num_edges  = g->index[end_id] - g->index[start_id];
     result.avg_degree = static_cast<float>(result.num_edges) 
         / (end_id - start_id);
+    
+    // Compute min and max degree.
+    float min_degree, max_degree;
+    min_degree = max_degree = static_cast<float>(
+            g->index[start_id + 1] - g->index[start_id]);
+    #pragma omp parallel for reduction(min:min_degree) reduction(max:max_degree)
+    for (int nid = start_id + 1; nid < end_id; nid++) {
+        float ndeg = static_cast<float>(g->index[nid + 1] - g->index[nid]);
+        min_degree = min(min_degree, ndeg);
+        max_degree = max(max_degree, ndeg);
+    }
+    result.min_degree = min_degree;
+    result.max_degree = max_degree;
 
     // Time kernel (avg of BENCHMARK_TIME_ITERS).
     Timer timer;
@@ -162,6 +175,18 @@ segment_res_t BFSCPUPushTreeBenchmark::benchmark_segment(
     result.num_edges  = g->num_edges;
     result.avg_degree = static_cast<float>(result.num_edges) / g->num_nodes;
 
+    // Compute min and max degree.
+    float min_degree, max_degree;
+    min_degree = max_degree = static_cast<float>(g->index[1] - g->index[0]);
+    #pragma omp parallel for reduction(min:min_degree) reduction(max:max_degree)
+    for (int nid = start_id + 1; nid < end_id; nid++) {
+        float ndeg = static_cast<float>(g->index[nid + 1] - g->index[nid]);
+        min_degree = min(min_degree, ndeg);
+        max_degree = max(max_degree, ndeg);
+    }
+    result.min_degree = min_degree;
+    result.max_degree = max_degree;
+
     SlidingWindow<nid_t> frontier(g->num_nodes);
     nid_t *parents = new nid_t[g->num_nodes];
     nid_t num_edges;
@@ -209,6 +234,20 @@ segment_res_t BFSCPUPullTreeBenchmark::benchmark_segment(
     result.end_id     = end_id;
     result.num_edges  = g->index[end_id] - g->index[start_id];
     result.avg_degree = static_cast<float>(result.num_edges) / g->num_nodes;
+
+    // Compute min and max degree.
+    float min_degree, max_degree;
+    min_degree = max_degree = static_cast<float>(
+            g->index[start_id + 1] - g->index[start_id]);
+    #pragma omp parallel for reduction(min:min_degree) reduction(max:max_degree)
+    for (int nid = start_id + 1; nid < end_id; nid++) {
+        float ndeg = static_cast<float>(g->index[nid + 1] - g->index[nid]);
+        min_degree = min(min_degree, ndeg);
+        max_degree = max(max_degree, ndeg);
+    }
+    result.min_degree = min_degree;
+    result.max_degree = max_degree;
+
 
     Bitmap::Bitmap *frontier      = Bitmap::constructor(g->num_nodes);
     Bitmap::Bitmap *next_frontier = Bitmap::constructor(g->num_nodes);
@@ -267,6 +306,18 @@ segment_res_t benchmark_sssp_cpu(
     result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
     result.num_edges  = g.num_edges;
 
+    /*// Compute min and max degree.*/
+    /*float min_degree, max_degree;*/
+    /*min_degree = max_degree = static_cast<float>(g.index[1] - g.index[0]);*/
+    /*#pragma omp parallel for reduction(min:min_degree) reduction(max:max_degree)*/
+    /*for (int nid = 1; nid < g.num_nodes; nid++) {*/
+        /*float ndeg = static_cast<float>(g.index[nid + 1] - g.index[nid]);*/
+        /*min_degree = min(min_degree, ndeg);*/
+        /*max_degree = max(max_degree, ndeg);*/
+    /*}*/
+    result.min_degree = 0;
+    result.max_degree = 0;
+
     // Define initial and return distances.
     weight_t *init_dist = new weight_t[g.num_nodes];
     #pragma omp parallel for
@@ -305,6 +356,18 @@ segment_res_t benchmark_bfs_cpu(
     result.end_id     = g.num_nodes;
     result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
     result.num_edges  = g.num_edges;
+
+    /*// Compute min and max degree.*/
+    /*float min_degree, max_degree;*/
+    /*min_degree = max_degree = static_cast<float>(g.index[1] - g.index[0]);*/
+    /*#pragma omp parallel for reduction(min:min_degree) reduction(max:max_degree)*/
+    /*for (int nid = 1; nid < g.num_nodes; nid++) {*/
+        /*float ndeg = static_cast<float>(g.index[nid + 1] - g.index[nid]);*/
+        /*min_degree = min(min_degree, ndeg);*/
+        /*max_degree = max(max_degree, ndeg);*/
+    /*}*/
+    result.min_degree = 0;
+    result.max_degree = 0;
 
     nid_t *parents = nullptr;
 
