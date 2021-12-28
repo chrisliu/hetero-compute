@@ -540,6 +540,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
     Timer timer; timer.Start();
     int epochs = 0;
 
+    /*
     // Push for the first iteration.
     // TODO: implement push for more than one epoch. Requires parallel queue.
     for (wnode_t nei : g.get_neighbors(start)) {{
@@ -554,6 +555,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         }}
     }}
     epochs++;
+    */
 
     while (updated != 0) {{
         // Reset update counters.
@@ -611,7 +613,6 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
     }}
     {indent_after(generate_distance_DtoH_synchronize())}
     timer.Stop();
-    std::cout << "Epochs: " << epochs << std::endl;
 
     // Copy output.
     *ret_dist = new weight_t[g.num_nodes];

@@ -28,6 +28,7 @@ int main(int argc, char *argv[]) {
 
     // Compute oracle distance.
     weight_t *oracle_dist = nullptr;
+    /*sssp_dijkstras_cpu_serial(g, source_id, &oracle_dist);*/
     sssp_pull_cpu_serial(g, source_id, &oracle_dist);
     std::cout << "Computed oracle distance." << std::endl;
 

@@ -71,7 +71,7 @@ double sssp_pull_cpu(
  *   - source_id <- initial point. 
  *   - ret_dist  <- pointer to the address of the return distance array.
  */
-void sssp_pull_cpu_serial(
+void sssp_dijkstras_cpu_serial(
         const CSRWGraph &g, nid_t source_id, weight_t **ret_dist
 ) {
     // Setup.
@@ -104,6 +104,34 @@ void sssp_pull_cpu_serial(
             }
         }
     }
+
+    *ret_dist = dist;
+}
+
+void sssp_pull_cpu_serial(
+        const CSRWGraph &g, nid_t source_id, weight_t **ret_dist
+) {
+    // Setup.
+    weight_t *dist = new weight_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+        dist[i] = INF_WEIGHT;
+    dist[source_id] = 0.0f;
+
+    nid_t num_updates;
+    do {
+        num_updates = 0;
+
+        for (nid_t v = 0; v < g.num_nodes; v++) {
+            for (wnode_t nei : g.get_neighbors(v)) {
+                weight_t prop_dist = dist[nei.v] + nei.w;
+                if (prop_dist < dist[v]) {
+                    dist[v] = prop_dist;
+                    num_updates++;
+                }
+            }
+        }
+    } while (num_updates != 0);
 
     *ret_dist = dist;
 }
