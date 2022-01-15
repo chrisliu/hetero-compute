@@ -24,7 +24,7 @@
 
 #include "../bitmap.cuh"
 #include "../graph.cuh"
-#include "../kernels/cpu/bfs.cuh"
+/*#include "../kernels/cpu/bfs.cuh"*/
 
 /******************************************************************************
  ***** Results Data Structures ************************************************
@@ -119,25 +119,25 @@ protected:
  *
  * Precomputes parents array and frontiers for each level.
  */
-class BFSTreeBenchmark : public TreeBenchmark<CSRUWGraph> {
-public:
-    BFSTreeBenchmark(const CSRUWGraph *g_);
-    ~BFSTreeBenchmark();
+/*class BFSTreeBenchmark : public TreeBenchmark<CSRUWGraph> {*/
+/*public:*/
+    /*BFSTreeBenchmark(const CSRUWGraph *g_);*/
+    /*~BFSTreeBenchmark();*/
 
-    bool  set_epoch(nid_t epoch);
-    nid_t get_epoch() const;
-    nid_t num_epochs() const;
+    /*bool  set_epoch(nid_t epoch);*/
+    /*nid_t get_epoch() const;*/
+    /*nid_t num_epochs() const;*/
 
-protected:
-    std::vector<nid_t *>          parents_arr;
-    std::vector<Bitmap::Bitmap *> frontiers;
-    nid_t                         cur_epoch;
+/*protected:*/
+    /*std::vector<nid_t *>          parents_arr;*/
+    /*std::vector<Bitmap::Bitmap *> frontiers;*/
+    /*nid_t                         cur_epoch;*/
 
-    nid_t          *get_parents() const;
-    Bitmap::Bitmap *get_frontier() const;
+    /*nid_t          *get_parents() const;*/
+    /*Bitmap::Bitmap *get_frontier() const;*/
 
-    nid_t *compute_ranges(const nid_t num_segments) const override;
-};
+    /*nid_t *compute_ranges(const nid_t num_segments) const override;*/
+/*};*/
 
 /******************************************************************************
  ***** Data Structure Implementations *****************************************
@@ -318,57 +318,57 @@ SSSPTreeBenchmark::SSSPTreeBenchmark(const CSRWGraph *g_)
     }
 }
 
-BFSTreeBenchmark::BFSTreeBenchmark(const CSRUWGraph *g_)
-    : TreeBenchmark(g_)
-    , cur_epoch(0)
-{
-    // Run BFS CPU pull to get expected parents and frontier bitmap.
-    SourcePicker<CSRUWGraph> sp(g);
-    nid_t source_id = sp.next_vertex();
+/*BFSTreeBenchmark::BFSTreeBenchmark(const CSRUWGraph *g_)*/
+    /*: TreeBenchmark(g_)*/
+    /*, cur_epoch(0)*/
+/*{*/
+    /*// Run BFS CPU pull to get expected parents and frontier bitmap.*/
+    /*SourcePicker<CSRUWGraph> sp(g);*/
+    /*nid_t source_id = sp.next_vertex();*/
 
-    nid_t *parents = new nid_t[g->num_nodes];
-    #pragma omp parallel for
-    for (int i = 0; i < g->num_nodes; i++)
-        parents[i] = INVALID_NODE;
-    parents[source_id] = source_id;
+    /*nid_t *parents = new nid_t[g->num_nodes];*/
+    /*#pragma omp parallel for*/
+    /*for (int i = 0; i < g->num_nodes; i++)*/
+        /*parents[i] = INVALID_NODE;*/
+    /*parents[source_id] = source_id;*/
 
-    Bitmap::Bitmap *frontier = Bitmap::constructor(g->num_nodes);
-    Bitmap::set_bit(frontier, source_id);
+    /*Bitmap::Bitmap *frontier = Bitmap::constructor(g->num_nodes);*/
+    /*Bitmap::set_bit(frontier, source_id);*/
 
-    Bitmap::Bitmap *next_frontier = Bitmap::constructor(g->num_nodes);
+    /*Bitmap::Bitmap *next_frontier = Bitmap::constructor(g->num_nodes);*/
 
-    nid_t num_nodes;
+    /*nid_t num_nodes;*/
 
-    do {
-        // Update parents and frontier arrays.
-        nid_t *cpy_parents = new nid_t[g->num_nodes];
-        std::copy(parents, parents + g->num_nodes, cpy_parents);
-        parents_arr.push_back(cpy_parents);
+    /*do {*/
+        /*// Update parents and frontier arrays.*/
+        /*nid_t *cpy_parents = new nid_t[g->num_nodes];*/
+        /*std::copy(parents, parents + g->num_nodes, cpy_parents);*/
+        /*parents_arr.push_back(cpy_parents);*/
 
-        Bitmap::Bitmap *cpy_frontier = Bitmap::constructor(g->num_nodes);
-        Bitmap::copy(frontier, cpy_frontier);
-        frontiers.push_back(cpy_frontier);
+        /*Bitmap::Bitmap *cpy_frontier = Bitmap::constructor(g->num_nodes);*/
+        /*Bitmap::copy(frontier, cpy_frontier);*/
+        /*frontiers.push_back(cpy_frontier);*/
 
-        // Run BFS pull as normal.
-        num_nodes = 0;
-        epoch_bfs_pull_cpu(*g, parents, 0, g->num_nodes, frontier,
-                next_frontier, num_nodes);
-        std::swap(frontier, next_frontier);
-        Bitmap::reset(next_frontier);
-    } while(num_nodes != 0);
+        /*// Run BFS pull as normal.*/
+        /*num_nodes = 0;*/
+        /*epoch_bfs_pull_cpu(*g, parents, 0, g->num_nodes, frontier,*/
+                /*next_frontier, num_nodes);*/
+        /*std::swap(frontier, next_frontier);*/
+        /*Bitmap::reset(next_frontier);*/
+    /*} while(num_nodes != 0);*/
 
-    // Free memory.
-    delete[] parents;
-    Bitmap::destructor(&frontier);
-    Bitmap::destructor(&next_frontier);
-}
+    /*// Free memory.*/
+    /*delete[] parents;*/
+    /*Bitmap::destructor(&frontier);*/
+    /*Bitmap::destructor(&next_frontier);*/
+/*}*/
 
-BFSTreeBenchmark::~BFSTreeBenchmark() {
-    for (int i = 0; i < parents_arr.size(); i++) {
-        delete[] parents_arr[i];
-        Bitmap::destructor(&frontiers[i]);
-    }
-}
+/*BFSTreeBenchmark::~BFSTreeBenchmark() {*/
+    /*for (int i = 0; i < parents_arr.size(); i++) {*/
+        /*delete[] parents_arr[i];*/
+        /*Bitmap::destructor(&frontiers[i]);*/
+    /*}*/
+/*}*/
 
 /**
  * Set current BFS epoch to benchmark.
@@ -377,49 +377,49 @@ BFSTreeBenchmark::~BFSTreeBenchmark() {
  * Returns:
  *   true if successful; false if otherwise.
  */
-bool BFSTreeBenchmark::set_epoch(nid_t epoch) {
-    if (epoch < 0 or epoch >= num_epochs())
-        return false;
+/*bool BFSTreeBenchmark::set_epoch(nid_t epoch) {*/
+    /*if (epoch < 0 or epoch >= num_epochs())*/
+        /*return false;*/
     
-    cur_epoch = epoch;
-    return true;
-}
+    /*cur_epoch = epoch;*/
+    /*return true;*/
+/*}*/
 
 /**
  * Get current BFS epoch that's being benchmarked.
  * Returns:
  *   Current BFS epoch.
  */
-nid_t BFSTreeBenchmark::get_epoch() const {
-    return cur_epoch;
-}
+/*nid_t BFSTreeBenchmark::get_epoch() const {*/
+    /*return cur_epoch;*/
+/*}*/
 
 /**
  * Get total number of epochs to benchmark.
  * Returns:
  *   Number of epochs available for benchmarking.
  */
-nid_t BFSTreeBenchmark::num_epochs() const {
-    return parents_arr.size();
-}
+/*nid_t BFSTreeBenchmark::num_epochs() const {*/
+    /*return parents_arr.size();*/
+/*}*/
 
-inline
-nid_t *BFSTreeBenchmark::get_parents() const {
-    return parents_arr[cur_epoch];
-}
+/*inline*/
+/*nid_t *BFSTreeBenchmark::get_parents() const {*/
+    /*return parents_arr[cur_epoch];*/
+/*}*/
 
-inline
-Bitmap::Bitmap *BFSTreeBenchmark::get_frontier() const {
-    return frontiers[cur_epoch];
-}
+/*inline*/
+/*Bitmap::Bitmap *BFSTreeBenchmark::get_frontier() const {*/
+    /*return frontiers[cur_epoch];*/
+/*}*/
 
 /**
  * Modify default compute ranges to align range start and end to bitmap's
  * internal data type size (i.e., num bits).
  */
-inline
-nid_t *BFSTreeBenchmark::compute_ranges(const nid_t num_segments) const {
-    return compute_equal_edge_ranges(*g, num_segments, Bitmap::data_size);
-}
+/*inline*/
+/*nid_t *BFSTreeBenchmark::compute_ranges(const nid_t num_segments) const {*/
+    /*return compute_equal_edge_ranges(*g, num_segments, Bitmap::data_size);*/
+/*}*/
 
 #endif // SRC_BENCHMARKS__BENCHMARK_H
