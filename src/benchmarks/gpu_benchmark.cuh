@@ -306,6 +306,9 @@ segment_res_t PRGPUTreeBenchmark::benchmark_segment(
     CUDA_ERRCHK(cudaEventCreate(&stop_t));
 
     // Run benchmark for this segment!
+    for(int i=0; i<g->num_nodes; i++){
+        init_dist[i]=1.0f/g->num_nodes;
+    }
     for (int iter = 0; iter < BENCHMARK_SEGMENT_TIME_ITERS; iter++) {
         // Setup kernel.
 	CUDA_ERRCHK(cudaMemcpy(cu_dist, init_dist, 

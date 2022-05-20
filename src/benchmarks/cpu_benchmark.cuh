@@ -176,7 +176,7 @@ segment_res_t PRCPUTreeBenchmark::benchmark_segment(
 	weight_t *dist = new weight_t[g->num_nodes];
         #pragma omp parallel for
 	for (int i = 0; i < g->num_nodes; i++)
-	    dist[i] = init_dist[i];
+	    dist[i] = 1.0f/g->num_nodes;//init_dist[i];
 	nid_t updated = 0;
 
 	// Run kernel.
@@ -449,11 +449,6 @@ segment_res_t benchmark_pr_cpu(
     nid_t previous_source = 0;
     double total_time = 0.0;
     for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
-	nid_t cur_source = sp.next_vertex();
-	init_dist[previous_source] = INF_WEIGHT;
-	init_dist[cur_source]      = 0;
-	previous_source = cur_source;
-
 	total_time += pr_pull_cpu(g, epoch_kernel, init_dist, &ret_dist);
 	delete[] ret_dist;
     }
