@@ -43,6 +43,17 @@ T warp_min(T val) {
     return val;
 }
 
+template <typename T,
+          typename = typename std::enable_if<is_contained<T, int, unsigned int,
+             long, unsigned long, long long, unsigned long long, float,
+             double>::value>>
+__device__ inline
+T warp_sum(T val) {
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1)
+	val = val+__shfl_down_sync(ALLWARP, val, offset);
+    return val;
+}
+
 /*****************************************************************************
  ***** Warp-level Operations *************************************************
  *****************************************************************************/

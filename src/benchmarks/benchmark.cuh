@@ -114,6 +114,15 @@ protected:
     weight_t *init_dist; // Initial distances.
 };
 
+class PRTreeBenchmark : public TreeBenchmark<CSRWGraph> {
+public:
+    PRTreeBenchmark(const CSRWGraph *g_);
+    ~PRTreeBenchmark();
+
+protected:
+    weight_t *init_dist; // Initial distances.
+};
+
 /**
  * BFS tree-based benchmark.
  *
@@ -315,6 +324,27 @@ SSSPTreeBenchmark::SSSPTreeBenchmark(const CSRWGraph *g_)
         )
 
         init_dist[i] = dist(gen);          
+    }
+}
+
+PRTreeBenchmark::~PRTreeBenchmark() {
+    delete[] init_dist;
+}
+
+PRTreeBenchmark::PRTreeBenchmark(const CSRWGraph *g_)
+    : TreeBenchmark(g_)
+{
+    // Initialize distances.
+    init_dist = new weight_t[g->num_nodes];
+    unsigned init_seed = 1024; // TODO: make this random?
+   #pragma omp parallel
+    {
+    std::mt19937_64 gen(init_seed + omp_get_thread_num());
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    for (int i = omp_get_thread_num(); i < g->num_nodes;
+        i += omp_get_num_threads()
+    )
+        init_dist[i] = dist(gen);
     }
 }
 
