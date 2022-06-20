@@ -14,6 +14,14 @@ sssp:
 	python3 sched.py --algorithm sssp $(SSSP_PROFILE_DIR)/*.yaml
 	mv sssp.cuh ../../src/kernels/heterogeneous/
 
+.PHONY: pr
+pr:
+	        python3 sched.py --algorithm pr *.yaml
+		        mv pr.cuh ../../src/kernels/heterogeneous/
+
 .PHONY: error
 error:
 	@echo "Please indicate which kernel :)"
+
+clean:
+	rm *.yaml

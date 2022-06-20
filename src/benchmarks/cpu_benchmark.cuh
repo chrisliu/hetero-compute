@@ -446,7 +446,6 @@ segment_res_t benchmark_pr_cpu(
     weight_t *ret_dist = nullptr;
 
     // Run kernel!
-    nid_t previous_source = 0;
     double total_time = 0.0;
     for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
 	total_time += pr_pull_cpu(g, epoch_kernel, init_dist, &ret_dist);

@@ -222,7 +222,7 @@ void epoch_pr_pull_gpu_warp_min(
         weight_t new_score = base_score+kDamp*warp_sum(incoming_total);
 
         // Update distance if applicable.
-	if (abs(new_score-score[nid])>epsilon) {
+	if (warpid==0 && abs(new_score-score[nid])>epsilon) {
 	    score[nid] = new_score;
 	    local_updated++;
 	}

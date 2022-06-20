@@ -13,6 +13,10 @@ benchmark_pr.exe: benchmark_pr.cu
 test: benchmark_pr.exe
 	./benchmark_pr.exe ../../graphs/graph_scale23_degree16.wsg 
 
+.PHONY: move
+move: 
+	mv *.yaml ../../util/scheduler
+
 .PHONY: clean
 clean:
 	-rm benchmark_pr.exe

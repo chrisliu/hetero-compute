@@ -184,40 +184,40 @@ int main(int argc, char *argv[]) {
     SourcePicker<CSRWGraph> sp(&g);
 
     // Run CPU kernel.
-    sp.reset();
+    /*sp.reset();
     {
         std::cout << "PR CPU:" << std::endl;
         segment_res_t res = benchmark_pr_cpu(g,
                 epoch_pr_pull_cpu_one_to_one, sp);
         std::cout << res;
-    }
+    }*/
 
     /*// Run GPU naive kernel.*/
-    sp.reset();
+    /*sp.reset();
     {
         std::cout << "PR GPU naive:" << std::endl;
         segment_res_t res = benchmark_pr_gpu(g,
                 epoch_pr_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);
         std::cout << res;
-    }
+    }*/
 
     /*// Run GPU warp min kernel.*/
     sp.reset();
-    {
+    /*{
         std::cout << "PR GPU warp min:" << std::endl;
         segment_res_t res = benchmark_pr_gpu(g,
                 epoch_pr_pull_gpu_warp_min, sp, NUM_BLOCKS, 1024);
         std::cout << res;
-    }
+    }*/
 
     /*// Run GPU block min kernel.*/
     sp.reset();
-    {
+    /*{
         std::cout << "PR GPU block min:" << std::endl;
         segment_res_t res = benchmark_pr_gpu(g,
                 epoch_pr_pull_gpu_block_min, sp, NUM_BLOCKS, 1024);
         std::cout << res;
-    }
+    }*/
 
     // Run heterogeneous kernel.
     sp.reset();
