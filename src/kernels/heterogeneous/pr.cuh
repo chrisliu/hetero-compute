@@ -185,32 +185,32 @@ double pr_pull_heterogeneous(const CSRWGraph &g,
         // Launch GPU epoch kernels.
         // Implicit CUDA device synchronize at the start of kernels.
         CUDA_ERRCHK(cudaSetDevice(0));
-        epoch_pr_pull_gpu_block_min<<<256, 1024, 0, compute_streams[0]>>>(
+        epoch_pr_pull_gpu_block_red<<<256, 1024, 0, compute_streams[0]>>>(
                 cu_indices[0], cu_neighbors[0],
                 block_ranges[0], block_ranges[1],
                 cu_dists[0], cu_updateds[0], g.num_nodes, cu_degrees);
         CUDA_ERRCHK(cudaEventRecord(compute_markers[0], compute_streams[0]));
-        epoch_pr_pull_gpu_block_min<<<1024, 256, 0, compute_streams[1]>>>(
+        epoch_pr_pull_gpu_block_red<<<1024, 256, 0, compute_streams[1]>>>(
                 cu_indices[1], cu_neighbors[1],
                 block_ranges[2], block_ranges[3],
                 cu_dists[0], cu_updateds[0], g.num_nodes, cu_degrees);
         CUDA_ERRCHK(cudaEventRecord(compute_markers[1], compute_streams[1]));
-        epoch_pr_pull_gpu_block_min<<<4096, 64, 0, compute_streams[2]>>>(
+        epoch_pr_pull_gpu_block_red<<<4096, 64, 0, compute_streams[2]>>>(
                 cu_indices[2], cu_neighbors[2],
                 block_ranges[4], block_ranges[5],
                 cu_dists[0], cu_updateds[0], g.num_nodes, cu_degrees);
         CUDA_ERRCHK(cudaEventRecord(compute_markers[2], compute_streams[2]));
-        epoch_pr_pull_gpu_warp_min<<<256, 1024, 0, compute_streams[3]>>>(
+        epoch_pr_pull_gpu_warp_red<<<256, 1024, 0, compute_streams[3]>>>(
                 cu_indices[3], cu_neighbors[3],
                 block_ranges[6], block_ranges[7],
                 cu_dists[0], cu_updateds[0], g.num_nodes, cu_degrees);
         CUDA_ERRCHK(cudaEventRecord(compute_markers[3], compute_streams[3]));
-        epoch_pr_pull_gpu_block_min<<<4096, 64, 0, compute_streams[4]>>>(
+        epoch_pr_pull_gpu_block_red<<<4096, 64, 0, compute_streams[4]>>>(
                 cu_indices[4], cu_neighbors[4],
                 block_ranges[8], block_ranges[9],
                 cu_dists[0], cu_updateds[0], g.num_nodes, cu_degrees);
         CUDA_ERRCHK(cudaEventRecord(compute_markers[4], compute_streams[4]));
-        epoch_pr_pull_gpu_warp_min<<<256, 1024, 0, compute_streams[5]>>>(
+        epoch_pr_pull_gpu_warp_red<<<256, 1024, 0, compute_streams[5]>>>(
                 cu_indices[5], cu_neighbors[5],
                 block_ranges[10], block_ranges[11],
                 cu_dists[0], cu_updateds[0], g.num_nodes, cu_degrees);
