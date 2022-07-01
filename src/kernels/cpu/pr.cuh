@@ -32,7 +32,7 @@
  */
 double pr_pull_cpu(
         const CSRWGraph &g, pr_cpu_epoch_func epoch_kernel, 
-        const weight_t *init_score, weight_t ** const ret_score
+        const weight_t *init_scores, weight_t ** const ret_score
 ) {
     // Setup computed scores.
     weight_t *score = new weight_t[g.num_nodes];
