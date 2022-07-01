@@ -168,7 +168,7 @@ void epoch_sssp_pull_gpu_one_to_one(
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__ 
-void epoch_sssp_pull_gpu_warp_min(
+void epoch_sssp_pull_gpu_warp_red(
         const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id, 
         weight_t *dist, nid_t *updated
@@ -228,7 +228,7 @@ void epoch_sssp_pull_gpu_warp_min(
  *   - updated   <- global counter on number of nodes updated.
  */
 __global__
-void epoch_sssp_pull_gpu_block_min(
+void epoch_sssp_pull_gpu_block_red(
         const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id,
         weight_t *dist, nid_t *updated
@@ -286,12 +286,12 @@ void epoch_sssp_pull_gpu_block_min(
 
 /** Identifier for epoch kernels. */
 enum class SSSPGPU {
-    one_to_one, warp_min, block_min, undefined
+    one_to_one, warp_red, block_red, undefined
 };
 
 /** List of kernels available (no good iterator for enum classes). */
 std::vector<SSSPGPU> sssp_gpu_kernels = {
-    SSSPGPU::one_to_one, SSSPGPU::warp_min, SSSPGPU::block_min
+    SSSPGPU::one_to_one, SSSPGPU::warp_red, SSSPGPU::block_red
 };
 
 std::vector<SSSPGPU> get_kernels(UNUSED SSSPGPU unused) {
@@ -309,8 +309,8 @@ std::vector<SSSPGPU> get_kernels(UNUSED SSSPGPU unused) {
 std::string to_repr(SSSPGPU ker) {
     switch (ker) {
         case SSSPGPU::one_to_one: return "sssp_gpu_onetoone";
-        case SSSPGPU::warp_min:   return "sssp_gpu_warp_min";
-        case SSSPGPU::block_min:  return "sssp_gpu_block_min";
+        case SSSPGPU::warp_red:   return "sssp_gpu_warp_red";
+        case SSSPGPU::block_red:  return "sssp_gpu_block_red";
         case SSSPGPU::undefined:  
         default:                  return "";
     }
@@ -326,8 +326,8 @@ std::string to_repr(SSSPGPU ker) {
 std::string to_string(SSSPGPU ker) {
     switch (ker) {
         case SSSPGPU::one_to_one: return "SSSP GPU one-to-one";
-        case SSSPGPU::warp_min:   return "SSSP GPU warp-min";
-        case SSSPGPU::block_min:  return "SSSP GPU block-min";
+        case SSSPGPU::warp_red:   return "SSSP GPU warp-red";
+        case SSSPGPU::block_red:  return "SSSP GPU block-red";
         case SSSPGPU::undefined:  
         default:                  return "undefined SSSP GPU kernel";
     }
@@ -343,8 +343,8 @@ std::string to_string(SSSPGPU ker) {
 sssp_gpu_epoch_func get_kernel(SSSPGPU ker) {
     switch (ker) {
         case SSSPGPU::one_to_one: return epoch_sssp_pull_gpu_one_to_one;
-        case SSSPGPU::warp_min:   return epoch_sssp_pull_gpu_warp_min;
-        case SSSPGPU::block_min:  return epoch_sssp_pull_gpu_block_min;
+        case SSSPGPU::warp_red:   return epoch_sssp_pull_gpu_warp_red;
+        case SSSPGPU::block_red:  return epoch_sssp_pull_gpu_block_red;
         case SSSPGPU::undefined:  
         default:                  return nullptr;
     }

@@ -64,12 +64,12 @@ int main(int argc, char *argv[]) {
         delete[] dist;
     }
 
-    // Check SSSP GPU warp min kernel.
+    // Check SSSP GPU warp red kernel.
     {
         weight_t *dist = nullptr;
-        sssp_pull_gpu(g, epoch_sssp_pull_gpu_warp_min, init_dist, &dist);
+        sssp_pull_gpu(g, epoch_sssp_pull_gpu_warp_red, init_dist, &dist);
 
-        std::cout << "Verifying SSSP GPU warp min kernel ..." << std::endl;
+        std::cout << "Verifying SSSP GPU warp red kernel ..." << std::endl;
         bool success = verify(oracle_dist, dist, g.num_nodes);
         std::cout << " > Verification " << (success ? "succeeded" : "failed")
             << "!" << std::endl;
@@ -77,13 +77,13 @@ int main(int argc, char *argv[]) {
         delete[] dist;
     }
 
-    // Check SSSP GPU block min kernel.
+    // Check SSSP GPU block red kernel.
     {
         weight_t *dist = nullptr;
-        sssp_pull_gpu(g, epoch_sssp_pull_gpu_block_min, init_dist, &dist,
+        sssp_pull_gpu(g, epoch_sssp_pull_gpu_block_red, init_dist, &dist,
                 64, 256);
 
-        std::cout << "Verifying SSSP GPU block min kernel ..." << std::endl;
+        std::cout << "Verifying SSSP GPU block red kernel ..." << std::endl;
         bool success = verify(oracle_dist, dist, g.num_nodes);
         std::cout << " > Verification " << (success ? "succeeded" : "failed")
             << "!" << std::endl;

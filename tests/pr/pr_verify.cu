@@ -10,7 +10,7 @@
 #include "../../src/kernels/heterogeneous/pr.cuh"
 
 /** Forward decl. */
-bool verify(const weight_t *oracle_dist, const weight_t *dist, 
+bool verify(const weight_t *oracle_score, const weight_t *score, 
         const nid_t num_nodes);
 
 int main(int argc, char *argv[]) {
@@ -26,105 +26,105 @@ int main(int argc, char *argv[]) {
     SourcePicker<CSRWGraph> sp(&g);
     nid_t source_id = sp.next_vertex();
 
-    // Compute oracle distance.
-    weight_t *oracle_dist = nullptr;
-    /*pr_dijkstras_cpu_serial(g, source_id, &oracle_dist);*/
+    // Compute oracle score.
+    weight_t *oracle_score = nullptr;
+    /*pr_dijkstras_cpu_serial(g, source_id, &oracle_score);*/
     //version that tests against serial
-    //pr_pull_cpu_serial(g, source_id, &oracle_dist);
-    //std::cout << "Computed oracle distance." << std::endl;
+    //pr_pull_cpu_serial(g, source_id, &oracle_score);
+    //std::cout << "Computed oracle score." << std::endl;
 
-    // Generate init distances.
-    weight_t *init_dist = new weight_t[g.num_nodes];
+    // Generate init score.
+    weight_t *init_score = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-        init_dist[i] = 1.0f/g.num_nodes;
-    init_dist[source_id] = 0.0f;
+        init_score[i] = 1.0f/g.num_nodes;
+    init_score[source_id] = 0.0f;
 
     {
-        weight_t *dist = nullptr;
+        weight_t *score = nullptr;
 
 	//version that test against cpu result
-	pr_pull_cpu(g, epoch_pr_pull_cpu_one_to_one, init_dist, &oracle_dist);
-	std::cout << "Computed oracle distance." << std::endl;
-        pr_pull_cpu(g, epoch_pr_pull_cpu_one_to_one, init_dist, &dist);
+	pr_pull_cpu(g, epoch_pr_pull_cpu_one_to_one, init_score, &oracle_score);
+	std::cout << "Computed oracle score." << std::endl;
+        pr_pull_cpu(g, epoch_pr_pull_cpu_one_to_one, init_score, &score);
 
         std::cout << "Verifying PR CPU kernel ..." << std::endl;
-        bool success = verify(oracle_dist, dist, g.num_nodes);
+        bool success = verify(oracle_score, score, g.num_nodes);
         std::cout << " > Verification " << (success ? "succeeded" : "failed")
             << "!" << std::endl;
 
-        delete[] dist;
+        delete[] score;
     }
 
     // Check PR GPU naive kernel.
     {
-        weight_t *dist = nullptr;
-        pr_pull_gpu(g, epoch_pr_pull_gpu_one_to_one, init_dist, &dist);
+        weight_t *score = nullptr;
+        pr_pull_gpu(g, epoch_pr_pull_gpu_one_to_one, init_score, &score);
 
         std::cout << "Verifying PR GPU naive kernel ..." << std::endl;
-        bool success = verify(oracle_dist, dist, g.num_nodes);
+        bool success = verify(oracle_score, score, g.num_nodes);
         std::cout << " > Verification " << (success ? "succeeded" : "failed")
             << "!" << std::endl;
 
-        delete[] dist;
+        delete[] score;
     }
 
-    // Check PR GPU warp min kernel.
+    // Check PR GPU warp red kernel.
     {
-        weight_t *dist = nullptr;
-        pr_pull_gpu(g, epoch_pr_pull_gpu_warp_min, init_dist, &dist);
+        weight_t *score = nullptr;
+        pr_pull_gpu(g, epoch_pr_pull_gpu_warp_red, init_score, &score);
 
-        std::cout << "Verifying PR GPU warp min kernel ..." << std::endl;
-        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << "Verifying PR GPU warp red kernel ..." << std::endl;
+        bool success = verify(oracle_score, score, g.num_nodes);
         std::cout << " > Verification " << (success ? "succeeded" : "failed")
             << "!" << std::endl;
 
-        delete[] dist;
+        delete[] score;
     }
 
-    // Check PR GPU block min kernel.
+    // Check PR GPU block red kernel.
     {
-        weight_t *dist = nullptr;
-        pr_pull_gpu(g, epoch_pr_pull_gpu_block_min, init_dist, &dist,
+        weight_t *score = nullptr;
+        pr_pull_gpu(g, epoch_pr_pull_gpu_block_red, init_score, &score,
                 64, 256);
 
-        std::cout << "Verifying PR GPU block min kernel ..." << std::endl;
-        bool success = verify(oracle_dist, dist, g.num_nodes);
+        std::cout << "Verifying PR GPU block red kernel ..." << std::endl;
+        bool success = verify(oracle_score, score, g.num_nodes);
         std::cout << " > Verification " << (success ? "succeeded" : "failed")
             << "!" << std::endl;
 
-        delete[] dist;
+        delete[] score;
     }
 
     // Check PR heterogeneous kernel.
     {
         enable_all_peer_access_pr();
-        weight_t *dist = nullptr;
-        pr_pull_heterogeneous(g, init_dist, &dist);
+        weight_t *score = nullptr;
+        pr_pull_heterogeneous(g, init_score, &score);
 
         std::cout << "Verifying PR heterogeneous kernel ..." << std::endl;
-        bool success = verify(oracle_dist, dist, g.num_nodes);
+        bool success = verify(oracle_score, score, g.num_nodes);
         std::cout << " > Verification " << (success ? "succeeded" : "failed")
             << "!" << std::endl;
 
-        delete[] dist;
+        delete[] score;
     }
 
-    delete[] oracle_dist;
+    delete[] oracle_score;
 
     return EXIT_SUCCESS;
 }
 
 /**
- * Verifies that the computed distances is the same as the oracle distance.
+ * Verifies that the computed scores is the same as the oracle score.
  * Parameters:
- *   - oracle_dist <- correct distance.
- *   - dist        <- computed distance (distance to check).
+ *   - oracle_score <- correct scoreance.
+ *   - score        <- computed score (score to check).
  *   - num_nodes   <- number of nodes in the graph.
  * Returns:
- *   true if the computed distance is correct.
+ *   true if the computed score is correct.
  */
-bool verify(const weight_t *oracle_dist, const weight_t *dist,
+bool verify(const weight_t *oracle_score, const weight_t *score,
         const nid_t num_nodes
 ) {
     bool is_correct = true;
@@ -132,10 +132,10 @@ bool verify(const weight_t *oracle_dist, const weight_t *dist,
     float epsilon=.0005;
 
     for (nid_t nid = 0; nid < num_nodes; nid++) {
-        if (abs(oracle_dist[nid]-dist[nid])>epsilon) {
+        if (abs(oracle_score[nid]-score[nid])>epsilon) {
             if (error_count < MAX_PRINT_ERRORS)
                 std::cout << " > " << nid << ": " 
-                    << dist[nid] << " != " << oracle_dist[nid] << std::endl;
+                    << score[nid] << " != " << oracle_score[nid] << std::endl;
             is_correct = false;
             error_count++;
         }

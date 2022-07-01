@@ -27,15 +27,15 @@ HIGH_DEGREE_FIRST = True
 class SSSPKernels(enum.Enum):
     CPU_one_to_one = enum.auto()
     GPU_one_to_one = enum.auto()
-    GPU_warp_min   = enum.auto()
-    GPU_block_min  = enum.auto()
+    GPU_warp_red   = enum.auto()
+    GPU_block_red  = enum.auto()
 
 def to_epochkernel_funcname(kernel: SSSPKernels) -> str:
     func_names = {
         SSSPKernels.CPU_one_to_one: 'epoch_sssp_pull_cpu_one_to_one',
         SSSPKernels.GPU_one_to_one: 'epoch_sssp_pull_gpu_one_to_one',
-        SSSPKernels.GPU_warp_min:   'epoch_sssp_pull_gpu_warp_min',
-        SSSPKernels.GPU_block_min:  'epoch_sssp_pull_gpu_block_min',
+        SSSPKernels.GPU_warp_red:   'epoch_sssp_pull_gpu_warp_red',
+        SSSPKernels.GPU_block_red:  'epoch_sssp_pull_gpu_block_red',
     }
     return func_names[kernel]
 
@@ -43,8 +43,8 @@ def ker_to_string(kernel: SSSPKernels) -> str:
     string_names = {
         SSSPKernels.CPU_one_to_one: 'SSSP CPU one-to-one',
         SSSPKernels.GPU_one_to_one: 'SSSP GPU one-to-one',
-        SSSPKernels.GPU_warp_min:   'SSSP GPU warp-min',
-        SSSPKernels.GPU_block_min:  'SSSP GPU block-min',
+        SSSPKernels.GPU_warp_red:   'SSSP GPU warp-red',
+        SSSPKernels.GPU_block_red:  'SSSP GPU block-red',
     }
     return string_names[kernel]
 

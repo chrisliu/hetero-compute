@@ -27,15 +27,15 @@ HIGH_DEGREE_FIRST = True
 class PRKernels(enum.Enum):
     CPU_one_to_one = enum.auto()
     GPU_one_to_one = enum.auto()
-    GPU_warp_min   = enum.auto()
-    GPU_block_min  = enum.auto()
+    GPU_warp_red   = enum.auto()
+    GPU_block_red  = enum.auto()
 
 def to_epochkernel_funcname(kernel: PRKernels) -> str:
     func_names = {
         PRKernels.CPU_one_to_one: 'epoch_pr_pull_cpu_one_to_one',
         PRKernels.GPU_one_to_one: 'epoch_pr_pull_gpu_one_to_one',
-        PRKernels.GPU_warp_min:   'epoch_pr_pull_gpu_warp_min',
-        PRKernels.GPU_block_min:  'epoch_pr_pull_gpu_block_min',
+        PRKernels.GPU_warp_red:   'epoch_pr_pull_gpu_warp_red',
+        PRKernels.GPU_block_red:  'epoch_pr_pull_gpu_block_red',
     }
     return func_names[kernel]
 
@@ -43,8 +43,8 @@ def ker_to_string(kernel: PRKernels) -> str:
     string_names = {
         PRKernels.CPU_one_to_one: 'PR CPU one-to-one',
         PRKernels.GPU_one_to_one: 'PR GPU one-to-one',
-        PRKernels.GPU_warp_min:   'PR GPU warp-min',
-        PRKernels.GPU_block_min:  'PR GPU block-min',
+        PRKernels.GPU_warp_red:   'PR GPU warp-red',
+        PRKernels.GPU_block_red:  'PR GPU block-red',
     }
     return string_names[kernel]
 
@@ -172,7 +172,7 @@ f"""
 {to_epochkernel_funcname(kernel.kerid)}<<<{kernel.block_count}, {kernel.thread_count}, 0, compute_streams[{idx}]>>>(
         cu_indices[{idx}], cu_neighbors[{idx}],
         block_ranges[{2 * idx}], block_ranges[{2 * idx + 1}],
-        cu_dists[{devid}], cu_updateds[{devid}], g.num_nodes, cu_degrees);
+        cu_scores[{devid}], cu_updateds[{devid}], g.num_nodes, cu_degrees);
 CUDA_ERRCHK(cudaEventRecord(compute_markers[{idx}], compute_streams[{idx}]));
 """.strip()
 
@@ -181,7 +181,7 @@ CUDA_ERRCHK(cudaEventRecord(compute_markers[{idx}], compute_streams[{idx}]));
                     segcode += '\n' + \
 f"""
 CUDA_ERRCHK(cudaMemcpyAsync(
-        dist + block_ranges[{2 * idx}], cu_dists[{devid}] + block_ranges[{2 * idx}],
+        score + block_ranges[{2 * idx}], cu_scores[{devid}] + block_ranges[{2 * idx}],
         (block_ranges[{2 * idx + 1}] - block_ranges[{2 * idx}]) * sizeof(weight_t),
         cudaMemcpyDeviceToHost, compute_streams[{idx}]));
 """.strip()
@@ -196,7 +196,7 @@ for (int gpu = 0; gpu < num_gpus_pr; gpu++) {{
     CUDA_ERRCHK(cudaStreamWaitEvent(memcpy_streams[{devid} * num_gpus_pr + gpu], 
             compute_markers[{idx}], 0));
     CUDA_ERRCHK(cudaMemcpyAsync(
-            cu_dists[gpu] + block_ranges[{2 * idx}], cu_dists[{devid}] + block_ranges[{2  * idx}],
+            cu_scores[gpu] + block_ranges[{2 * idx}], cu_scores[{devid}] + block_ranges[{2  * idx}],
             (block_ranges[{2 * idx + 1}] - block_ranges[{2 * idx}]) * sizeof(weight_t),
             cudaMemcpyDeviceToDevice, memcpy_streams[{devid} * num_gpus_pr + gpu]));
 }}
@@ -226,7 +226,7 @@ for (int gpu = 0; gpu < num_gpus_pr; gpu++) {{
 f""" 
 #pragma omp parallel
 {{
-    {to_epochkernel_funcname(kernel.kerid)}(g, dist, 
+    {to_epochkernel_funcname(kernel.kerid)}(g, score, 
             seg_ranges[{kerseg.seg_start}], seg_ranges[{kerseg.seg_end + 1}],
             omp_get_thread_num(), omp_get_num_threads(), cpu_updated);
 }}
@@ -236,7 +236,7 @@ f"""
     ###########################################################################
     ##### Host to Device Sync #################################################
     ###########################################################################
-    def generate_distance_HtoD_synchronize() -> str:
+    def generate_score_HtoD_synchronize() -> str:
         if not has_cpu: return ''
         code = ''
         cpu_schedule = next(filter(lambda devsched: 
@@ -247,15 +247,15 @@ f"""
 f""" 
 for (int gpu = 0; gpu < num_gpus_pr; gpu++) {{
     CUDA_ERRCHK(cudaMemcpyAsync(
-        cu_dists[gpu] + seg_ranges[{kerseg.seg_start}],
-        dist + seg_ranges[{kerseg.seg_start}],
+        cu_scores[gpu] + seg_ranges[{kerseg.seg_start}],
+        score + seg_ranges[{kerseg.seg_start}],
         (seg_ranges[{kerseg.seg_end + 1}] - seg_ranges[{kerseg.seg_start}]) * sizeof(weight_t),
         cudaMemcpyHostToDevice, memcpy_streams[gpu * num_gpus_pr + gpu]));
 }}
 """.strip() + '\n'
         return code.strip()
 
-    def generate_distance_HtoD_synchronize_sync() -> str:
+    def generate_score_HtoD_synchronize_sync() -> str:
         if not has_cpu: return ''
         code = \
 f""" 
@@ -334,7 +334,7 @@ for (int gpu = 0; gpu < num_gpus_pr; gpu++)
                         code += \
 f"""
 CUDA_ERRCHK(cudaMemcpyAsync(
-    cu_dists[{to_gpu}] + seg_ranges[{start}], cu_dists[{from_gpu}] + seg_ranges[{start}],
+    cu_scores[{to_gpu}] + seg_ranges[{start}], cu_scores[{from_gpu}] + seg_ranges[{start}],
     (seg_ranges[{end + 1}] - seg_ranges[{start}]) * sizeof(weight_t), 
     cudaMemcpyDeviceToDevice, memcpy_streams[{from_gpu} * num_gpus_pr + {to_gpu}]));
 """.strip() + '\n'
@@ -355,10 +355,10 @@ CUDA_ERRCHK(cudaStreamSynchronize(memcpy_streams[{from_gpu} * num_gpus_pr + {to_
     ###########################################################################
     ##### Device to Host Sync #################################################
     ###########################################################################
-    def generate_distance_DtoH_synchronize() -> str:
+    def generate_score_DtoH_synchronize() -> str:
         if has_cpu: return ''
 
-        code = '// Copy GPU distances back to host.' + '\n'
+        code = '// Copy GPU scores back to host.' + '\n'
         for devid, segs in enumerate(gpu_contig_mem):
             if devid != 0: code += '\n'
             code += f'CUDA_ERRCHK(cudaSetDevice({devid}))' + '\n'
@@ -366,7 +366,7 @@ CUDA_ERRCHK(cudaStreamSynchronize(memcpy_streams[{from_gpu} * num_gpus_pr + {to_
                 code += \
 f"""
 CUDA_ERRCHK(cudaMemcpyAsync(
-    dist + seg_ranges[{seg[0]}], cu_dists[{devid}] + seg_ranges[{seg[0]}],
+    score + seg_ranges[{seg[0]}], cu_scores[{devid}] + seg_ranges[{seg[0]}],
     (seg_ranges[{seg[1] + 1}] - seg_ranges[{seg[0]}]) * sizeof(weight_t), 
     cudaMemcpyDeviceToHost, memcpy_streams[{devid} * num_gpus_pr + {devid}]));
 """.strip() + '\n'
@@ -432,7 +432,7 @@ f"""
 constexpr int num_gpus_pr = {num_gpus_pr};
 
 /** Forward decl. */
-void gpu_butterfly_P2P_pr(nid_t *seg_ranges, weight_t **cu_dists, 
+void gpu_butterfly_P2P_pr(nid_t *seg_ranges, weight_t **cu_scores, 
         cudaStream_t *memcpy_streams);
 
 /**
@@ -444,13 +444,13 @@ void gpu_butterfly_P2P_pr(nid_t *seg_ranges, weight_t **cu_dists,
  *
  * Parameters:
  *   - g         <- graph.
- *   - init_dist <- initial distance array.
- *   - ret_dist  <- pointer to the address of the return distance array.
+ *   - init_score <- initial score array.
+ *   - ret_score  <- pointer to the address of the return score array.
  * Returns:
  *   Execution time in milliseconds.
  */
 double pr_pull_heterogeneous(const CSRWGraph &g, 
-        const weight_t *init_dist, weight_t ** const ret_dist
+        const weight_t *init_score, weight_t ** const ret_score
 ) {{
     // Configuration.
     constexpr int num_blocks   = {num_blocks};
@@ -498,22 +498,22 @@ double pr_pull_heterogeneous(const CSRWGraph &g,
             CUDA_ERRCHK(cudaStreamCreate(&memcpy_streams[from * num_gpus_pr + to]));
     }}
 
-    // Distance.
-    size_t   dist_size = g.num_nodes * sizeof(weight_t);
-    weight_t *dist     = nullptr; 
+    // score.
+    size_t   score_size = g.num_nodes * sizeof(weight_t);
+    weight_t *score     = nullptr; 
 
-    /// CPU Distance.
-    CUDA_ERRCHK(cudaMallocHost((void **) &dist, dist_size));
+    /// CPU score.
+    CUDA_ERRCHK(cudaMallocHost((void **) &score, score_size));
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-        dist[i] = init_dist[i];
+        score[i] = init_score[i];
 
-    /// GPU Distances.
-    weight_t *cu_dists[num_gpus_pr];
+    /// GPU scores.
+    weight_t *cu_scores[num_gpus_pr];
     for (int gpu = 0; gpu < num_gpus_pr; gpu++) {{        
         CUDA_ERRCHK(cudaSetDevice(gpu));
-        CUDA_ERRCHK(cudaMalloc((void **) &cu_dists[gpu], dist_size));
-        CUDA_ERRCHK(cudaMemcpyAsync(cu_dists[gpu], dist, dist_size,
+        CUDA_ERRCHK(cudaMalloc((void **) &cu_scores[gpu], score_size));
+        CUDA_ERRCHK(cudaMemcpyAsync(cu_scores[gpu], score, score_size,
             cudaMemcpyHostToDevice, memcpy_streams[gpu * num_gpus_pr]));
     }}
     for (int gpu = 0; gpu < num_gpus_pr; gpu++) {{
@@ -545,7 +545,7 @@ double pr_pull_heterogeneous(const CSRWGraph &g,
     // TODO: add this as a parameter.
     nid_t start;
     for (nid_t i = 0; i < g.num_nodes; i++)
-        if (init_dist[i] != 1.0f/g.num_nodes) start = i;
+        if (init_score[i] != 1.0f/g.num_nodes) start = i;
 
     // Start kernel!
     Timer timer; timer.Start();
@@ -557,11 +557,11 @@ double pr_pull_heterogeneous(const CSRWGraph &g,
     for (wnode_t nei : g.get_neighbors(start)) {{
         if (nei.v == start) continue;
 
-        dist[nei.v] = nei.w;       
+        score[nei.v] = nei.w;       
         for (int gpu = 0; gpu < num_gpus_pr; gpu++) {{
             CUDA_ERRCHK(cudaSetDevice(gpu));
             CUDA_ERRCHK(cudaMemcpyAsync(
-                cu_dists[gpu] + nei.v, dist + nei.v,
+                cu_scores[gpu] + nei.v, score + nei.v,
                 sizeof(weight_t), cudaMemcpyHostToDevice));
         }}
     }}
@@ -609,17 +609,17 @@ double pr_pull_heterogeneous(const CSRWGraph &g,
             updated += gpu_updateds[gpu];
         }}
 
-        // Only update GPU distances if another epoch will be run.
+        // Only update GPU scores if another epoch will be run.
         if (updated != 0) {{
-            // Copy CPU distances to all GPUs.
-            {indent_after(generate_distance_HtoD_synchronize(), 12)}
+            // Copy CPU scores to all GPUs.
+            {indent_after(generate_score_HtoD_synchronize(), 12)}
 
-            // Copy GPU distances peer-to-peer.
+            // Copy GPU scores peer-to-peer.
             // Not implmented if INTERLEAVE=true.
-            gpu_butterfly_P2P_pr(seg_ranges, cu_dists, memcpy_streams); 
+            gpu_butterfly_P2P_pr(seg_ranges, cu_scores, memcpy_streams); 
 
             // Synchronize HtoD async calls.
-            {indent_after(generate_distance_HtoD_synchronize_sync(), 12)}
+            {indent_after(generate_score_HtoD_synchronize_sync(), 12)}
         }}
 
         {indent_after(generate_interleave_DtoH_synchronize(), 8)}
@@ -627,14 +627,14 @@ double pr_pull_heterogeneous(const CSRWGraph &g,
         {indent_after(generate_interleave_synchronize(), 8)}
         epochs++;
     }}
-    {indent_after(generate_distance_DtoH_synchronize())}
+    {indent_after(generate_score_DtoH_synchronize())}
     timer.Stop();
 
     // Copy output.
-    *ret_dist = new weight_t[g.num_nodes];
+    *ret_score = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-        (*ret_dist)[i] = dist[i];
+        (*ret_score)[i] = score[i];
 
     // Free streams.
     for (int gpu = 0; gpu < num_gpus_pr; gpu++) {{
@@ -652,7 +652,7 @@ double pr_pull_heterogeneous(const CSRWGraph &g,
     for (int gpu = 0; gpu < num_gpus_pr; gpu++) {{
         CUDA_ERRCHK(cudaSetDevice(gpu));
         CUDA_ERRCHK(cudaFree(cu_updateds[gpu]));
-        CUDA_ERRCHK(cudaFree(cu_dists[gpu]));
+        CUDA_ERRCHK(cudaFree(cu_scores[gpu]));
         
         for (int block = gpu_blocks[gpu]; block < gpu_blocks[gpu + 1];
                 block++
@@ -661,7 +661,7 @@ double pr_pull_heterogeneous(const CSRWGraph &g,
             CUDA_ERRCHK(cudaFree(cu_neighbors[block]));
         }}
     }}
-    CUDA_ERRCHK(cudaFreeHost(dist));
+    CUDA_ERRCHK(cudaFreeHost(score));
     delete[] seg_ranges;
 
     return timer.Millisecs();
@@ -692,7 +692,7 @@ void enable_all_peer_access_pr() {{
 /**
  * Butterfly GPU P2P transfer.
  */
-void gpu_butterfly_P2P_pr(nid_t *seg_ranges, weight_t **cu_dists, 
+void gpu_butterfly_P2P_pr(nid_t *seg_ranges, weight_t **cu_scores, 
     cudaStream_t *memcpy_streams
 ) {{
     {indent_after(generate_butterfly_transfer())}

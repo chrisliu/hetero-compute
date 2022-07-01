@@ -21,20 +21,20 @@
  *****************************************************************************/
 
 /**
- * Runs SSSP kernel on CPU in parallel. Synchronization occurs in serial.
+ * Runs PR kernel on CPU in parallel. Synchronization occurs in serial.
  * Parameters:
  *   - g            <- graph.
  *   - epoch_kernel <- cpu epoch kernel.
- *   - init_dist    <- initial distance array.
- *   - ret_dist     <- pointer to the address of the return distance array.
+ *   - init_score    <- initial score array.
+ *   - ret_score     <- pointer to the address of the return score array.
  * Returns:
  *   Execution time in milliseconds.
  */
 double pr_pull_cpu(
         const CSRWGraph &g, pr_cpu_epoch_func epoch_kernel, 
-        const weight_t *init_dist, weight_t ** const ret_score
+        const weight_t *init_score, weight_t ** const ret_score
 ) {
-    // Setup computed distances.
+    // Setup computed scores.
     weight_t *score = new weight_t[g.num_nodes];
     weight_t init_score = 1.0f / g.num_nodes;
     #pragma omp parallel for
@@ -69,17 +69,17 @@ double pr_pull_cpu(
  * Parameters:
  *   - g         <- graph.
  *   - source_id <- initial point. 
- *   - ret_dist  <- pointer to the address of the return distance array.
+ *   - ret_score  <- pointer to the address of the return score array.
  */
 void pr_dijkstras_cpu_serial(
-        const CSRWGraph &g, nid_t source_id, weight_t **ret_dist
+        const CSRWGraph &g, nid_t source_id, weight_t **ret_score
 ) {
     // Setup.
-    weight_t *dist = new weight_t[g.num_nodes];
+    weight_t *score = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-        dist[i] = INF_WEIGHT;
-    dist[source_id] = 0.0f;
+        score[i] = INF_WEIGHT;
+    score[source_id] = 0.0f;
 
     using wnode_pair_t = std::pair<weight_t, nid_t>;
     std::priority_queue<wnode_pair_t, std::vector<wnode_pair_t>, 
@@ -91,32 +91,32 @@ void pr_dijkstras_cpu_serial(
         nid_t    nid    = frontier.top().second;
         frontier.pop();
 
-        // If this is the latest distance.
-        if (weight == dist[nid]) {
+        // If this is the latest score.
+        if (weight == score[nid]) {
             for (wnode_t nei : g.get_neighbors(nid)) {
                 weight_t new_weight = weight + nei.w;
 
                 // If possible, update weight.
-                if (new_weight < dist[nei.v]) {
-                    dist[nei.v] = new_weight;
+                if (new_weight < score[nei.v]) {
+                    score[nei.v] = new_weight;
                     frontier.push(std::make_pair(new_weight, nei.v));
                 }
             }
         }
     }
 
-    *ret_dist = dist;
+    *ret_score = score;
 }
 
 void pr_pull_cpu_serial(
-        const CSRWGraph &g, nid_t source_id, weight_t **ret_dist
+        const CSRWGraph &g, nid_t source_id, weight_t **ret_score
 ) {
     // Setup.
-    weight_t *dist = new weight_t[g.num_nodes];
+    weight_t *score = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-        dist[i] = INF_WEIGHT;
-    dist[source_id] = 0.0f;
+        score[i] = INF_WEIGHT;
+    score[source_id] = 0.0f;
 
     nid_t num_updates;
     do {
@@ -124,16 +124,16 @@ void pr_pull_cpu_serial(
 
         for (nid_t v = 0; v < g.num_nodes; v++) {
             for (wnode_t nei : g.get_neighbors(v)) {
-                weight_t prop_dist = dist[nei.v] + nei.w;
-                if (prop_dist < dist[v]) {
-                    dist[v] = prop_dist;
+                weight_t prop_score = score[nei.v] + nei.w;
+                if (prop_score < score[v]) {
+                    score[v] = prop_score;
                     num_updates++;
                 }
             }
         }
     } while (num_updates != 0);
 
-    *ret_dist = dist;
+    *ret_score = score;
 }
 
 const float kDamp = 0.85;
@@ -146,7 +146,7 @@ const float kDamp = 0.85;
  * Runs SSSP pull on CPU for one epoch.
  * Parameters:
  *   - g           <- graph.
- *   - dist        <- input distances and output distances computed this 
+ *   - score        <- input scores and output scores computed this 
  *                    epoch.
  *   - start_id    <- starting node id.
  *   - end_id      <- ending node id (exclusive).
@@ -168,13 +168,13 @@ void epoch_pr_pull_cpu_one_to_one(
     for (int nid = start_id + tid; nid < end_id; nid += num_threads) {
 	weight_t incoming_total=0;
 
-        // Find shortest candidate distance.
+        // Find shortest candidate score.
         for (wnode_t nei : g.get_neighbors(nid)) {
 	    incoming_total+=score[nei.v]/g.get_degree(nei.v);
         }
 	weight_t new_score=base_score + kDamp * incoming_total;
 
-        // Update distance if applicable
+        // Update score if applicable
         if (abs(new_score-score[nid])>epsilon) {
             score[nid] = new_score;
             local_updated++;

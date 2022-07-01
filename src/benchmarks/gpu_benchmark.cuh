@@ -111,6 +111,18 @@ segment_res_t benchmark_sssp_gpu(
         const weight_t *init_dist, weight_t **ret_dist,
         int block_size = 64, int thread_count = 1024);
 
+/**
+ * Benchmarks a full PR GPU run.
+ * Parameters:
+ *   - g            <- graph.
+ *   - epoch_kernel <- cpu epoch_kernel.
+ *   - init_dist    <- initial distance array.
+ *   - ret_dist     <- pointer to the address of the return distance array.
+ *   - block_count  <- (optional) number of blocks.
+ *   - thread_count <- (optional) number of threads.
+ * Returns:
+ *   Execution results.
+ */
 segment_res_t benchmark_pr_gpu(
         const CSRWGraph &g,
 	pr_gpu_epoch_func epoch_kernel,
@@ -608,24 +620,24 @@ segment_res_t benchmark_pr_gpu(
 
 
     // Define initial and return distances.
-    weight_t *init_dist = new weight_t[g.num_nodes];
+    weight_t *init_score = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-        init_dist[i] = 1.0f/g.num_nodes;
-    weight_t *ret_dist = nullptr;
+        init_score[i] = 1.0f/g.num_nodes;
+    weight_t *ret_score = nullptr;
 
     // Run kernel!
     nid_t previous_source = 0;
     double total_time = 0.0;
     for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
 	nid_t cur_source = sp.next_vertex();
-	init_dist[previous_source] = INF_WEIGHT;
-	init_dist[cur_source]      = 0;
+	init_score[previous_source] = INF_WEIGHT;
+	init_score[cur_source]      = 0;
 	previous_source = cur_source;
 
-	total_time += pr_pull_gpu(g, epoch_kernel, init_dist, &ret_dist,
+	total_time += pr_pull_gpu(g, epoch_kernel, init_score, &ret_score,
 		block_size, thread_count);
-	delete[] ret_dist;
+	delete[] ret_score;
     }
 
     // Save results.

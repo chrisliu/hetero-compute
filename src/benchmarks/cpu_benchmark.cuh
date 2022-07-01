@@ -173,17 +173,17 @@ segment_res_t PRCPUTreeBenchmark::benchmark_segment(
     double total_time = 0.0;
     for (int iter = 0; iter < BENCHMARK_SEGMENT_TIME_ITERS; iter++) {
         // Setup kernel.
-	weight_t *dist = new weight_t[g->num_nodes];
+	weight_t *score = new weight_t[g->num_nodes];
         #pragma omp parallel for
 	for (int i = 0; i < g->num_nodes; i++)
-	    dist[i] = 1.0f/g->num_nodes;//init_dist[i];
+	    score[i] = 1.0f/g->num_nodes;//init_score[i];
 	nid_t updated = 0;
 
 	// Run kernel.
 	timer.Start();
         #pragma omp parallel
 	{
-	    (*epoch_kernel)(*g, dist, start_id, end_id, omp_get_thread_num(),
+	    (*epoch_kernel)(*g, score, start_id, end_id, omp_get_thread_num(),
 	    	omp_get_num_threads(), updated);
 	}
 	timer.Stop();
@@ -422,7 +422,16 @@ segment_res_t benchmark_sssp_cpu(
     return result;    
 }
 
-
+/**
+ * Benchmarks a full PR CPU run.
+ * Parameters:
+ *   - g            <- graph.
+ *   - epoch_kernel <- cpu epoch_kernel.
+ *   - init_score   <- initial score array.
+ *   - ret_score     <- pointer to the address of the return score array.
+ * Returns:
+ *   Execution results.
+ */
 segment_res_t benchmark_pr_cpu(
 		const CSRWGraph &g, pr_cpu_epoch_func epoch_kernel,
 		SourcePicker<CSRWGraph> &sp
@@ -438,18 +447,18 @@ segment_res_t benchmark_pr_cpu(
     result.min_degree = 0;
     result.max_degree = 0;
 
-    // Define initial and return distances.
-    weight_t *init_dist = new weight_t[g.num_nodes];
+    // Define initial and return scores.
+    weight_t *init_score = new weight_t[g.num_nodes];
     #pragma omp parallel for
     for (int i = 0; i < g.num_nodes; i++)
-	init_dist[i] = 1.0f/g.num_nodes;
-    weight_t *ret_dist = nullptr;
+	init_score[i] = 1.0f/g.num_nodes;
+    weight_t *ret_score = nullptr;
 
     // Run kernel!
     double total_time = 0.0;
     for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
-	total_time += pr_pull_cpu(g, epoch_kernel, init_dist, &ret_dist);
-	delete[] ret_dist;
+	total_time += pr_pull_cpu(g, epoch_kernel, init_score, &ret_score);
+	delete[] ret_score;
     }
 
     // Save results.

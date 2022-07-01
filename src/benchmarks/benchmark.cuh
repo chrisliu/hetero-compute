@@ -114,6 +114,10 @@ protected:
     weight_t *init_dist; // Initial distances.
 };
 
+/**
+ * PR tree based benchmark.
+ * Initializes a random distance vector to test on.
+ */
 class PRTreeBenchmark : public TreeBenchmark<CSRWGraph> {
 public:
     PRTreeBenchmark(const CSRWGraph *g_);
