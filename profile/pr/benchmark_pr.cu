@@ -168,12 +168,12 @@ int main(int argc, char *argv[]) {
     run_treebenchmark<PRGPUTreeBenchmark>(g, DEVGPU,
             PRGPU::one_to_one, NUM_BLOCKS, 1024);
     run_treebenchmark<PRGPUTreeBenchmark>(g, DEVGPU,
-            PRGPU::warp_min, NUM_BLOCKS, 1024);
+            PRGPU::warp_red, NUM_BLOCKS, 1024);
 
     std::vector<int> thread_counts = {64, 128, 256, 512, 1024};
     for (int thread_count : thread_counts)
         run_treebenchmark<PRGPUTreeBenchmark>(g,
-                DEVGPU, PRGPU::block_min,
+                DEVGPU, PRGPU::block_red,
                 NUM_BLOCKS * (1024 / thread_count), thread_count);
 #endif // RUN_EPOCH_KERNELS
 
@@ -201,21 +201,21 @@ int main(int argc, char *argv[]) {
         std::cout << res;
     }*/
 
-    /*// Run GPU warp min kernel.*/
+    /*// Run GPU warp red kernel.*/
     sp.reset();
     /*{
-        std::cout << "PR GPU warp min:" << std::endl;
+        std::cout << "PR GPU warp red:" << std::endl;
         segment_res_t res = benchmark_pr_gpu(g,
-                epoch_pr_pull_gpu_warp_min, sp, NUM_BLOCKS, 1024);
+                epoch_pr_pull_gpu_warp_red, sp, NUM_BLOCKS, 1024);
         std::cout << res;
     }*/
 
-    /*// Run GPU block min kernel.*/
+    /*// Run GPU block red kernel.*/
     sp.reset();
     /*{
-        std::cout << "PR GPU block min:" << std::endl;
+        std::cout << "PR GPU block red:" << std::endl;
         segment_res_t res = benchmark_pr_gpu(g,
-                epoch_pr_pull_gpu_block_min, sp, NUM_BLOCKS, 1024);
+                epoch_pr_pull_gpu_block_red, sp, NUM_BLOCKS, 1024);
         std::cout << res;
     }*/
 
