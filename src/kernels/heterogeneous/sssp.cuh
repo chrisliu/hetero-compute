@@ -173,7 +173,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
         // Launch GPU epoch kernels.
         // Implicit CUDA device synchronize at the start of kernels.
         CUDA_ERRCHK(cudaSetDevice(0));
-        epoch_sssp_pull_gpu_block_min<<<256, 1024, 0, compute_streams[0]>>>(
+        epoch_sssp_pull_gpu_block_red<<<256, 1024, 0, compute_streams[0]>>>(
                 cu_indices[0], cu_neighbors[0],
                 block_ranges[0], block_ranges[1],
                 cu_dists[0], cu_updateds[0]);
@@ -182,7 +182,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                 dist + block_ranges[0], cu_dists[0] + block_ranges[0],
                 (block_ranges[1] - block_ranges[0]) * sizeof(weight_t),
                 cudaMemcpyDeviceToHost, compute_streams[0]));
-        epoch_sssp_pull_gpu_block_min<<<1024, 256, 0, compute_streams[1]>>>(
+        epoch_sssp_pull_gpu_block_red<<<1024, 256, 0, compute_streams[1]>>>(
                 cu_indices[1], cu_neighbors[1],
                 block_ranges[2], block_ranges[3],
                 cu_dists[0], cu_updateds[0]);
@@ -191,7 +191,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                 dist + block_ranges[2], cu_dists[0] + block_ranges[2],
                 (block_ranges[3] - block_ranges[2]) * sizeof(weight_t),
                 cudaMemcpyDeviceToHost, compute_streams[1]));
-        epoch_sssp_pull_gpu_block_min<<<4096, 64, 0, compute_streams[2]>>>(
+        epoch_sssp_pull_gpu_block_red<<<4096, 64, 0, compute_streams[2]>>>(
                 cu_indices[2], cu_neighbors[2],
                 block_ranges[4], block_ranges[5],
                 cu_dists[0], cu_updateds[0]);
@@ -200,7 +200,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                 dist + block_ranges[4], cu_dists[0] + block_ranges[4],
                 (block_ranges[5] - block_ranges[4]) * sizeof(weight_t),
                 cudaMemcpyDeviceToHost, compute_streams[2]));
-        epoch_sssp_pull_gpu_block_min<<<2048, 128, 0, compute_streams[3]>>>(
+        epoch_sssp_pull_gpu_block_red<<<2048, 128, 0, compute_streams[3]>>>(
                 cu_indices[3], cu_neighbors[3],
                 block_ranges[6], block_ranges[7],
                 cu_dists[0], cu_updateds[0]);
@@ -209,7 +209,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                 dist + block_ranges[6], cu_dists[0] + block_ranges[6],
                 (block_ranges[7] - block_ranges[6]) * sizeof(weight_t),
                 cudaMemcpyDeviceToHost, compute_streams[3]));
-        epoch_sssp_pull_gpu_block_min<<<4096, 64, 0, compute_streams[4]>>>(
+        epoch_sssp_pull_gpu_block_red<<<4096, 64, 0, compute_streams[4]>>>(
                 cu_indices[4], cu_neighbors[4],
                 block_ranges[8], block_ranges[9],
                 cu_dists[0], cu_updateds[0]);
@@ -218,7 +218,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                 dist + block_ranges[8], cu_dists[0] + block_ranges[8],
                 (block_ranges[9] - block_ranges[8]) * sizeof(weight_t),
                 cudaMemcpyDeviceToHost, compute_streams[4]));
-        epoch_sssp_pull_gpu_warp_min<<<256, 1024, 0, compute_streams[5]>>>(
+        epoch_sssp_pull_gpu_warp_red<<<256, 1024, 0, compute_streams[5]>>>(
                 cu_indices[5], cu_neighbors[5],
                 block_ranges[10], block_ranges[11],
                 cu_dists[0], cu_updateds[0]);
@@ -227,7 +227,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                 dist + block_ranges[10], cu_dists[0] + block_ranges[10],
                 (block_ranges[11] - block_ranges[10]) * sizeof(weight_t),
                 cudaMemcpyDeviceToHost, compute_streams[5]));
-        epoch_sssp_pull_gpu_block_min<<<4096, 64, 0, compute_streams[6]>>>(
+        epoch_sssp_pull_gpu_block_red<<<4096, 64, 0, compute_streams[6]>>>(
                 cu_indices[6], cu_neighbors[6],
                 block_ranges[12], block_ranges[13],
                 cu_dists[0], cu_updateds[0]);
@@ -236,7 +236,7 @@ double sssp_pull_heterogeneous(const CSRWGraph &g,
                 dist + block_ranges[12], cu_dists[0] + block_ranges[12],
                 (block_ranges[13] - block_ranges[12]) * sizeof(weight_t),
                 cudaMemcpyDeviceToHost, compute_streams[6]));
-        epoch_sssp_pull_gpu_warp_min<<<256, 1024, 0, compute_streams[7]>>>(
+        epoch_sssp_pull_gpu_warp_red<<<256, 1024, 0, compute_streams[7]>>>(
                 cu_indices[7], cu_neighbors[7],
                 block_ranges[14], block_ranges[15],
                 cu_dists[0], cu_updateds[0]);
