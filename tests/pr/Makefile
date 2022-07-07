@@ -6,7 +6,7 @@ CXX             = $(CPP_COMPILER) $(CPP_FLAGS) $(addprefix -Xcompiler , ${CROSS_
 .PHONY: all
 all: pr_verify.exe
 
-sssp_verify.exe: pr_verify.cu
+pr_verify.exe: pr_verify.cu
 	$(CXX) pr_verify.cu -o pr_verify.exe
 
 .HONY: test
