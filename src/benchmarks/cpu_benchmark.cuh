@@ -15,6 +15,7 @@
 #include "../kernels/kernel_types.cuh"
 /*#include "../kernels/cpu/bfs.cuh"*/
 #include "../kernels/cpu/sssp.cuh"
+#include "../kernels/cpu/pr.cuh"
 
 /*****************************************************************************
  ***** Benchmarks ************************************************************
@@ -27,6 +28,19 @@ public:
 
 protected:
     sssp_cpu_epoch_func epoch_kernel; // CPU epoch kernel.
+
+    segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
+};
+
+
+
+class PRCPUTreeBenchmark : public PRTreeBenchmark {
+public:
+    PRCPUTreeBenchmark(
+	const CSRWGraph *g_, pr_cpu_epoch_func epoch_kernel_);
+
+protected:
+    pr_cpu_epoch_func epoch_kernel; // CPU epoch kernel.
 
     segment_res_t benchmark_segment(const nid_t start_id, const nid_t end_id);
 };
@@ -120,6 +134,68 @@ segment_res_t SSSPCPUTreeBenchmark::benchmark_segment(
     result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
     // TODO: divided by 2 is a conservative estimate.
 
+    return result;
+}
+
+
+PRCPUTreeBenchmark::PRCPUTreeBenchmark(
+      const CSRWGraph *g_, pr_cpu_epoch_func epoch_kernel_)
+    : PRTreeBenchmark(g_)
+    , epoch_kernel(epoch_kernel_)
+{}
+
+segment_res_t PRCPUTreeBenchmark::benchmark_segment(
+	const nid_t start_id, const nid_t end_id
+    ) {
+    // Initialize results and calculate segment properties.
+    segment_res_t result;
+    result.start_id   = start_id;
+    result.end_id     = end_id;
+    result.num_edges  = g->index[end_id] - g->index[start_id];
+    result.avg_degree = static_cast<float>(result.num_edges) 
+	/ (end_id - start_id);
+
+    // Compute min and max degree.
+    float min_degree, max_degree;
+    min_degree = max_degree = static_cast<float>(
+        g->index[start_id + 1] - g->index[start_id]);
+    #pragma omp parallel for reduction(min:min_degree) reduction(max:max_degree)
+    for (int nid = start_id + 1; nid < end_id; nid++) {
+        float ndeg = static_cast<float>(g->index[nid + 1] - g->index[nid]);
+	min_degree = min(min_degree, ndeg);
+	max_degree = max(max_degree, ndeg);
+    }
+    result.min_degree = min_degree;
+    result.max_degree = max_degree;
+
+    // Time kernel (avg of BENCHMARK_TIME_ITERS).
+    Timer timer;
+    double total_time = 0.0;
+    for (int iter = 0; iter < BENCHMARK_SEGMENT_TIME_ITERS; iter++) {
+        // Setup kernel.
+	weight_t *score = new weight_t[g->num_nodes];
+        #pragma omp parallel for
+	for (int i = 0; i < g->num_nodes; i++)
+	    score[i] = 1.0f/g->num_nodes;//init_score[i];
+	nid_t updated = 0;
+
+	// Run kernel.
+	timer.Start();
+        #pragma omp parallel
+	{
+	    (*epoch_kernel)(*g, score, start_id, end_id, omp_get_thread_num(),
+	    	omp_get_num_threads(), updated);
+	}
+	timer.Stop();
+
+	// Save time.
+	total_time += timer.Millisecs();
+    }
+
+    // Save results.
+    result.millisecs = total_time / BENCHMARK_SEGMENT_TIME_ITERS;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
+    // TODO: divided by 2 is a conservative estimate.
     return result;
 }
 
@@ -329,7 +405,7 @@ segment_res_t benchmark_sssp_cpu(
     nid_t previous_source = 0;
     double total_time = 0.0;
     for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
-        nid_t cur_source = sp.next_vertex();
+        nid_t cur_source	= sp.next_vertex();
         init_dist[previous_source] = INF_WEIGHT;
         init_dist[cur_source]      = 0;
         previous_source = cur_source;
@@ -346,6 +422,52 @@ segment_res_t benchmark_sssp_cpu(
     return result;    
 }
 
+/**
+ * Benchmarks a full PR CPU run.
+ * Parameters:
+ *   - g            <- graph.
+ *   - epoch_kernel <- cpu epoch_kernel.
+ *   - init_score   <- initial score array.
+ *   - ret_score     <- pointer to the address of the return score array.
+ * Returns:
+ *   Execution results.
+ */
+segment_res_t benchmark_pr_cpu(
+		const CSRWGraph &g, pr_cpu_epoch_func epoch_kernel,
+		SourcePicker<CSRWGraph> &sp
+) {
+    // Initialize results and calculate segment properties.
+    segment_res_t result;
+    result.start_id   = 0;
+    result.end_id     = g.num_nodes;
+    result.avg_degree = static_cast<float>(g.num_edges) / g.num_nodes;
+    result.num_edges  = g.num_edges;
+
+    /*// Compute min and max degree.*/
+    result.min_degree = 0;
+    result.max_degree = 0;
+
+    // Define initial and return scores.
+    weight_t *init_score = new weight_t[g.num_nodes];
+    #pragma omp parallel for
+    for (int i = 0; i < g.num_nodes; i++)
+	init_score[i] = 1.0f/g.num_nodes;
+    weight_t *ret_score = nullptr;
+
+    // Run kernel!
+    double total_time = 0.0;
+    for (int iter = 0; iter < BENCHMARK_FULL_TIME_ITERS; iter++) {
+	total_time += pr_pull_cpu(g, epoch_kernel, init_score, &ret_score);
+	delete[] ret_score;
+    }
+
+    // Save results.
+    result.millisecs = total_time / BENCHMARK_FULL_TIME_ITERS;
+    result.gteps     = result.num_edges / (result.millisecs / 1000) / 1e9 / 2;
+    // TODO: divided by 2 is a conservative estimate.
+
+    return result;    
+}
 
 /*segment_res_t benchmark_bfs_cpu(*/
         /*const CSRUWGraph &g, bfs_cpu_kernel kernel, SourcePicker<CSRUWGraph> &sp*/

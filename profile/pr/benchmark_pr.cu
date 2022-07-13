@@ -12,8 +12,8 @@
 #include "../../src/benchmarks/gpu_benchmark.cuh"
 #include "../../src/benchmarks/cpu_benchmark.cuh"
 #include "../../src/benchmarks/heterogeneous_benchmark.cuh"
-#include "../../src/kernels/cpu/sssp.cuh"
-#include "../../src/kernels/gpu/sssp.cuh"
+#include "../../src/kernels/cpu/pr.cuh"
+#include "../../src/kernels/gpu/pr.cuh"
 
 /*****************************************************************************
  ***** Config ****************************************************************
@@ -161,23 +161,23 @@ int main(int argc, char *argv[]) {
 
 #ifdef RUN_EPOCH_KERNELS
     // Run CPU benchmarks.
-    run_treebenchmark<SSSPCPUTreeBenchmark>(g, DEVCPU,
-            SSSPCPU::one_to_one);
-
+    run_treebenchmark<PRCPUTreeBenchmark>(g, DEVCPU,
+            PRCPU::one_to_one);
+    
     // Run GPU benchmarks.
-    run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,
-            SSSPGPU::one_to_one, NUM_BLOCKS, 1024);
-    run_treebenchmark<SSSPGPUTreeBenchmark>(g, DEVGPU,
-            SSSPGPU::warp_red, NUM_BLOCKS, 1024);
+    run_treebenchmark<PRGPUTreeBenchmark>(g, DEVGPU,
+            PRGPU::one_to_one, NUM_BLOCKS, 1024);
+    run_treebenchmark<PRGPUTreeBenchmark>(g, DEVGPU,
+            PRGPU::warp_red, NUM_BLOCKS, 1024);
 
     std::vector<int> thread_counts = {64, 128, 256, 512, 1024};
     for (int thread_count : thread_counts)
-        run_treebenchmark<SSSPGPUTreeBenchmark>(g,
-                DEVGPU, SSSPGPU::block_red,
+        run_treebenchmark<PRGPUTreeBenchmark>(g,
+                DEVGPU, PRGPU::block_red,
                 NUM_BLOCKS * (1024 / thread_count), thread_count);
 #endif // RUN_EPOCH_KERNELS
 
-    enable_all_peer_access();
+    enable_all_peer_access_pr();
 
     // Full kernel runs.
 #ifdef RUN_FULL_KERNELS
@@ -186,36 +186,36 @@ int main(int argc, char *argv[]) {
     // Run CPU kernel.
     sp.reset();
     {
-        std::cout << "SSSP CPU:" << std::endl;
-        segment_res_t res = benchmark_sssp_cpu(g,
-                epoch_sssp_pull_cpu_one_to_one, sp);
+        std::cout << "PR CPU:" << std::endl;
+        segment_res_t res = benchmark_pr_cpu(g,
+                epoch_pr_pull_cpu_one_to_one, sp);
         std::cout << res;
     }
 
     /*// Run GPU naive kernel.*/
     sp.reset();
     {
-        std::cout << "SSSP GPU naive:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);
+        std::cout << "PR GPU naive:" << std::endl;
+        segment_res_t res = benchmark_pr_gpu(g,
+                epoch_pr_pull_gpu_one_to_one, sp, NUM_BLOCKS, 1024);
         std::cout << res;
     }
 
     /*// Run GPU warp red kernel.*/
     sp.reset();
     {
-        std::cout << "SSSP GPU warp red:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_warp_red, sp, NUM_BLOCKS, 1024);
+        std::cout << "PR GPU warp red:" << std::endl;
+        segment_res_t res = benchmark_pr_gpu(g,
+                epoch_pr_pull_gpu_warp_red, sp, NUM_BLOCKS, 1024);
         std::cout << res;
     }
 
     /*// Run GPU block red kernel.*/
     sp.reset();
     {
-        std::cout << "SSSP GPU block red:" << std::endl;
-        segment_res_t res = benchmark_sssp_gpu(g,
-                epoch_sssp_pull_gpu_block_red, sp, NUM_BLOCKS, 1024);
+        std::cout << "PR GPU block red:" << std::endl;
+        segment_res_t res = benchmark_pr_gpu(g,
+                epoch_pr_pull_gpu_block_red, sp, NUM_BLOCKS, 1024);
         std::cout << res;
     }
 
@@ -223,8 +223,8 @@ int main(int argc, char *argv[]) {
     sp.reset();
     {
         // Load in schedule.
-        std::cout << "SSSP heterogeneous:" << std::endl;
-        segment_res_t res = benchmark_sssp_heterogeneous(g, sp);
+        std::cout << "PR heterogeneous:" << std::endl;
+        segment_res_t res = benchmark_pr_heterogeneous(g, sp);
         std::cout << res;
     }
 #endif // RUN_FULL_KERNELS

@@ -2,6 +2,7 @@ import argparse
 import os
 import time
 import yaml
+import pdb
 
 import scheduler
 
@@ -9,7 +10,7 @@ from collections import defaultdict
 from typing import *
 
 # Supported algorithms.
-algorithms = ['bfs', 'sssp']
+algorithms = ['bfs', 'sssp', 'pr']
 
 def main():
     # Load arguments.
@@ -20,6 +21,8 @@ def main():
         handle_bfs(args)
     elif args.algorithm == 'sssp':
         handle_sssp(args)
+    elif args.algorithm == 'pr':
+        handle_pr(args)
 
 def create_parser() -> argparse.ArgumentParser:
     """Returns a valid python argument parser."""
@@ -96,6 +99,43 @@ def handle_sssp(args: argparse.Namespace) -> None:
         ofs.write(
             scheduler.kernelgen.generate_sssp_hetero_source_code(schedule))
 
+def handle_pr(args: argparse.Namespace) -> None:
+    # Load profiles and query device counts.
+    profiles = load_profiles_pr(args.profiles)
+    hardware_config = query_devices(profiles)
+    #hardware_config = {'Intel Xeon E5-2686': 1, 'NVIDIA Tesla M60': 2}
+    #hardware_config = {'Intel i7-9700K': 1, 'NVIDIA Quadro RTX 4000': 2}
+    #hardware_config = {'Intel i7-9700K': 1, 'NVIDIA Quadro RTX 4000': 1}
+    #hardware_config = {'NVIDIA Quadro RTX 4000': 8}
+    #hardware_config = {'NVIDIA Quadro RTX 4000': 1}
+    profiles = filter_profiles(profiles, hardware_config)
+
+    # Schedule.
+    s = scheduler.MostGainScheduler(profiles)
+    start_t = time.time()
+    schedule = s.schedule(hardware_config)
+    end_t = time.time()
+    print(f"Scheduler took {end_t - start_t:0.2f} seconds.")
+ 
+    # Display schedule.
+    scheduler.pprint_schedule(schedule)
+
+    # Print speedup against single device.
+    worst_time = worst_device_time(schedule)
+    single_dev_time = s.best_single_device_time
+    print(f"Longest device time:     {worst_time:0.2f} ms")
+    print(f"Best single device time: {single_dev_time:0.2f} ms")
+    print(f"{single_dev_time / worst_time:0.2f}x speedup")
+
+    # Save schedule.
+    scheduler.contiguify_schedule(schedule)
+    write_schedule(schedule, 'out.skd')
+
+    # Write out PR hetero file.
+    with open('pr.cuh', 'w') as ofs:
+         ofs.write(
+                 scheduler.kernelgen.generate_pr_hetero_source_code(schedule))
+
 def load_profiles_bfs(fnames: List[str]) -> scheduler.PushPullSchedule:
     """Returns a list of tuples of device profiles by epochs.
 
@@ -166,6 +206,28 @@ def load_profiles_sssp(fnames: List[str]) -> List[scheduler.DeviceProfile]:
     return [
         scheduler.DeviceProfile(device_name, kernel_profiles)
         for device_name, kernel_profiles in device_map.items()
+    ]
+
+def load_profiles_pr(fnames: List[str]) -> List[scheduler.DeviceProfile]:
+    """Returns contents of profile files."""
+    #pdb.set_trace()
+    device_map = defaultdict(list)
+    for fname in fnames:
+        with open(fname, 'r') as ifs:
+            config_results = yaml.full_load(ifs)
+        # Save segment execution times as a kernel profile.
+        device_name    = config_results['config']['device']
+        kernel_name    = config_results['config']['kernel']
+        kernel_results = config_results['results'][0]['segments']
+        kernel_execs   = [segment['millis'] for segment in kernel_results]
+        kernel_profile = scheduler.KernelProfile(kernel_name, kernel_execs)
+
+        device_map[device_name].append(kernel_profile)
+
+    # Package Dict["device name", List[KernelProfile]] into List[DeviceProfile]
+    return [
+            scheduler.DeviceProfile(device_name, kernel_profiles)
+            for device_name, kernel_profiles in device_map.items()
     ]
 
 def query_devices(profiles: List[scheduler.DeviceProfile]) -> Dict[str, int]:

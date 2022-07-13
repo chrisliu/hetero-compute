@@ -1,9 +1,9 @@
 /**
- * GPU implementations of SSSP pull kernels.
+ * GPU implementations of PR pull kernels.
  */
 
-#ifndef SRC_KERNELS_GPU__KERNEL_SSSP_CUH
-#define SRC_KERNELS_GPU__KERNEL_SSSP_CUH
+#ifndef SRC_KERNELS_GPU__KERNEL_PR_CUH
+#define SRC_KERNELS_GPU__KERNEL_PR_CUH
 
 #include <iostream>
 #include <omp.h> 
@@ -18,10 +18,10 @@
 
 /** Forward decl. */
 __global__ 
-void epoch_sssp_pull_gpu_one_to_one(
+void epoch_pr_pull_gpu_one_to_one(
         const offset_t *index, const wnode_t *neighbors, 
-        const nid_t start_id, const nid_t end_id, weight_t *dist, 
-        nid_t *updated);
+        const nid_t start_id, const nid_t end_id, weight_t *score, 
+        nid_t *updated, int numNodes, offset_t *degrees);
 
 /*****************************************************************************
  ***** SSSP Kernel ***********************************************************
@@ -32,19 +32,19 @@ void epoch_sssp_pull_gpu_one_to_one(
  * Parameters:
  *   - g            <- graph.
  *   - epoch_kernel <- gpu epoch kernel.
- *   - init_dist    <- initial distance array.
- *   - ret_dist     <- pointer to the address of the return distance array.
+ *   - init_score   <- initial score array.
+ *   - ret_score     <- pointer to the address of the return score array.
  *   - block_count  <- (optional) number of blocks.
  *   - thread_count <- (optional) number of threads.
  * Returns:
  *   Execution time in milliseconds.
  */
-double sssp_pull_gpu(
-        const CSRWGraph &g, sssp_gpu_epoch_func epoch_kernel, 
-        const weight_t *init_dist, weight_t ** const ret_dist, 
+double pr_pull_gpu(
+        const CSRWGraph &g, pr_gpu_epoch_func epoch_kernel, 
+        weight_t *init_score, weight_t ** const ret_score, 
         int block_count = 64, int thread_count = 1024
 ) {
-    CONDCHK(epoch_kernel != epoch_sssp_pull_gpu_one_to_one 
+    CONDCHK(epoch_kernel != epoch_pr_pull_gpu_one_to_one 
                 and thread_count % 32 != 0, 
             "thread count must be divisible by 32");
 
@@ -59,12 +59,23 @@ double sssp_pull_gpu(
             cudaMemcpyHostToDevice));
     CUDA_ERRCHK(cudaMemcpy(cu_neighbors, g.neighbors, neighbors_size, 
             cudaMemcpyHostToDevice));
-    
-    // Distance.
-    weight_t *cu_dist = nullptr;
-    size_t dist_size = g.num_nodes * sizeof(weight_t);
-    CUDA_ERRCHK(cudaMalloc((void **) &cu_dist, dist_size));
-    CUDA_ERRCHK(cudaMemcpy(cu_dist, init_dist, dist_size, 
+     
+    //degrees
+    offset_t *cu_degrees      = nullptr;
+    offset_t *degrees = new offset_t[g.num_nodes];
+    for(int i=0; i<g.num_nodes; i++){
+        degrees[i]=g.get_degree(i);
+    }
+    size_t deg_size = g.num_nodes * sizeof(offset_t);
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_degrees, deg_size));
+    CUDA_ERRCHK(cudaMemcpy(cu_degrees, degrees, deg_size,
+	    cudaMemcpyHostToDevice));
+
+    // Score
+    weight_t *cu_score = nullptr;
+    size_t score_size = g.num_nodes * sizeof(weight_t);
+    CUDA_ERRCHK(cudaMalloc((void **) &cu_score, score_size));
+    CUDA_ERRCHK(cudaMemcpy(cu_score, init_score, score_size, 
             cudaMemcpyHostToDevice));
 
     // Update counter.
@@ -74,27 +85,34 @@ double sssp_pull_gpu(
 
     // Start kernel!
     Timer timer; timer.Start();
+    int iters=0;
     while (updated != 0) {
         CUDA_ERRCHK(cudaMemset(cu_updated, 0, sizeof(nid_t)));
 
         (*epoch_kernel)<<<block_count, thread_count>>>(cu_index, 
-                cu_neighbors, 0, g.num_nodes, cu_dist, cu_updated);
+                cu_neighbors, 0, g.num_nodes, cu_score, cu_updated, 
+		g.num_nodes, cu_degrees);
 
         CUDA_ERRCHK(cudaMemcpy(&updated, cu_updated, sizeof(nid_t),
                 cudaMemcpyDeviceToHost));
+	iters++;
+	if(iters>200){
+	    break;
+	}
     }
     timer.Stop();
 
-    // Copy distances.
-    *ret_dist = new weight_t[g.num_nodes];
-    CUDA_ERRCHK(cudaMemcpy(*ret_dist, cu_dist, dist_size, 
+    // Copy scores.
+    *ret_score = new weight_t[g.num_nodes];
+    CUDA_ERRCHK(cudaMemcpy(*ret_score, cu_score, score_size, 
                 cudaMemcpyDeviceToHost));
 
     // Free memory.
     CUDA_ERRCHK(cudaFree(cu_index));
     CUDA_ERRCHK(cudaFree(cu_neighbors));
     CUDA_ERRCHK(cudaFree(cu_updated));
-    CUDA_ERRCHK(cudaFree(cu_dist));
+    CUDA_ERRCHK(cudaFree(cu_score));
+    CUDA_ERRCHK(cudaFree(cu_degrees));
 
     return timer.Millisecs();
 }
@@ -104,7 +122,7 @@ double sssp_pull_gpu(
  ******************************************************************************/
 
 /**
- * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
+ * Runs PR pull on GPU for one epoch on a range of nodes [start_id, end_id).
  * Each thread is assigned to a single node.
  *
  * Parameters:
@@ -113,34 +131,40 @@ double sssp_pull_gpu(
  *   - neighbors <- graph neighbors corresponding to the indexed nodes.
  *   - start_id  <- starting node id.
  *   - end_id    <- ending node id (exclusive).
- *   - dist      <- input distance and output distances computed this epoch
+ *   - score      <- input score and output score computed this epoch
  *                  including nodes that \notin [start_id, end_id).
  *   - updated   <- global counter on number of nodes updated.
+ *   - numNodes  <- the number of nodes
+ *   - degrees   <- the degree of each node
  */
 __global__ 
-void epoch_sssp_pull_gpu_one_to_one(
+void epoch_pr_pull_gpu_one_to_one(
         const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id, 
-        weight_t *dist, nid_t *updated
+        weight_t *score, nid_t *updated, int numNodes, offset_t* degrees
 ) {
     int tid         = blockIdx.x * blockDim.x + threadIdx.x;
     int num_threads = gridDim.x * blockDim.x;
 
+    float kDamp=.85;
     int local_updated = 0;
+    float epsilon=.00000005;
+    weight_t base_score=(1.0f - kDamp) / numNodes;
 
     for (nid_t nid = start_id + tid; nid < end_id; nid += num_threads) {
-        weight_t new_dist = dist[nid];
+	weight_t incoming_total=0;
 
-        // Find shortest candidate distance.
+        // Find sum of the scores.
         nid_t index_id = nid - start_id;
         for (offset_t i = index[index_id]; i < index[index_id + 1]; i++) {
-            weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;
-            new_dist = min(prop_dist, new_dist);
-        }
+	    nid_t v=neighbors[i].v;
+            incoming_total+=score[v]/degrees[v];
+	}
+	weight_t new_score=base_score+kDamp*incoming_total;
 
-        // Update distance if applicable.
-        if (new_dist != dist[nid]) {
-            dist[nid] = new_dist;
+        // Update score if applicable.
+        if (abs(new_score-score[nid])>epsilon) {
+            score[nid] = new_score;
             local_updated++;
         }
     }
@@ -150,9 +174,9 @@ void epoch_sssp_pull_gpu_one_to_one(
 }
 
 /**
- * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
- * Each warp is assigned to a single node. To compute min distance, a warp-level
- * min is executed.
+ * Runs PR pull on GPU for one epoch on a range of nodes [start_id, end_id).
+ * Each warp is assigned to a single node. To compute sum of score, a warp-level
+ * sum is executed.
  *
  * Conditions:
  *   - blockDim.x % warpSize == 0 (i.e., number of threads per block is some 
@@ -163,54 +187,61 @@ void epoch_sssp_pull_gpu_one_to_one(
  *   - neighbors <- graph neighbors corresponding to the indexed nodes.
  *   - start_id  <- starting node id.
  *   - end_id    <- ending node id (exclusive).
- *   - dist      <- input distance and output distances computed this epoch
+ *   - score     <- input score and output scores computed this epoch
  *                  including nodes that \notin [start_id, end_id).
  *   - updated   <- global counter on number of nodes updated.
+ *   - numNodes  <- the number of nodes
+ *   - degrees   <- the degree of each node
  */
 __global__ 
-void epoch_sssp_pull_gpu_warp_red(
+void epoch_pr_pull_gpu_warp_red(
         const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id, 
-        weight_t *dist, nid_t *updated
+        weight_t *score, nid_t *updated, int numNodes, offset_t* degrees
 ) {
     int tid         = blockIdx.x * blockDim.x + threadIdx.x;
     int warpid      = tid & (warpSize - 1); // ID within a warp.
     int num_threads = gridDim.x * blockDim.x;
+
+    float kDamp=.85;
+    float epsilon=.00000005;
+    weight_t base_score=(1.0f - kDamp) / numNodes;
 
     nid_t local_updated = 0;
 
     for (nid_t nid = start_id + tid / warpSize; nid < end_id; 
             nid += (num_threads / warpSize)
     ) {
-        weight_t new_dist = dist[nid];
+        weight_t incoming_total=0;
 
-        // Find shortest candidate distance.
+        // Find sum of score.
         nid_t index_id = nid - start_id;
         for (offset_t i = index[index_id] + warpid; i < index[index_id + 1]; 
                 i += warpSize
         ) {
-            weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;
-            new_dist = min(prop_dist, new_dist);
+	    nid_t v=neighbors[i].v;
+            incoming_total+=score[v]/degrees[v];
         }
 
-        new_dist = warp_min(new_dist);
+        weight_t new_score = base_score+kDamp*warp_sum(incoming_total);
 
-        // Update distance if applicable.
-        if (warpid == 0 and new_dist != dist[nid]) {
-            dist[nid] = new_dist;
-            local_updated++;
-        }
+        // Update score if applicable.
+	if (warpid==0 && abs(new_score-score[nid])>epsilon) {
+	    score[nid] = new_score;
+	    local_updated++;
+	}
+	
     }
-
     // Push update count.
-    if (warpid == 0)
+    if (warpid == 0){
         atomicAdd(updated, local_updated);
+    }
 }
 
 /**
- * Runs SSSP pull on GPU for one epoch on a range of nodes [start_id, end_id).
- * Each block is assigned to a single node. To compute min distance, a 
- * block-level min is executed.
+ * Runs PR pull on GPU for one epoch on a range of nodes [start_id, end_id).
+ * Each block is assigned to a single node. To compute sum of score, a 
+ * block-level sum is executed.
  *
  * Conditions:
  *   - warpSize == 32             
@@ -223,54 +254,60 @@ void epoch_sssp_pull_gpu_warp_red(
  *   - neighbors <- graph neighbors corresponding to the indexed nodes.
  *   - start_id  <- starting node id.
  *   - end_id    <- ending node id (exclusive).
- *   - dist      <- input distance and output distances computed this epoch
+ *   - score      <- input score and output scores computed this epoch
  *                  including nodes that \notin [start_id, end_id).
  *   - updated   <- global counter on number of nodes updated.
+ *   - numNodes  <- the number of nodes
+ *   - degrees   <- the degree of each node
  */
 __global__
-void epoch_sssp_pull_gpu_block_red(
+void epoch_pr_pull_gpu_block_red(
         const offset_t *index, const wnode_t *neighbors, 
         const nid_t start_id, const nid_t end_id,
-        weight_t *dist, nid_t *updated
+        weight_t *score, nid_t *updated, int numNodes, offset_t* degrees
 ) {
-    __shared__ weight_t block_dist[32];
+    __shared__ weight_t block_score[32];
 
     int tid    = blockIdx.x * blockDim.x + threadIdx.x;
     int warpid = tid & (warpSize - 1); // ID within a warp.
     
-    // Initialize block distances.
+    // Initialize block scores.
     if (threadIdx.x / warpSize == 0)
-        block_dist[warpid] = INF_WEIGHT;
+        block_score[warpid] =0;
+
+    float kDamp=.85;
+    float epsilon=0.00000005;
+    weight_t base_score=(1.0f - kDamp) / numNodes;
 
     nid_t local_updated = 0;
 
     for (nid_t nid = start_id + blockIdx.x; nid < end_id; nid += gridDim.x) {
-        weight_t new_dist = dist[nid];
+	weight_t incoming_total=0;
 
-        // Find shortest candidate distance.
+        // Find sum of scores.
         nid_t index_id = nid - start_id;
         for (offset_t i = index[index_id] + threadIdx.x; 
                 i < index[index_id + 1]; i += blockDim.x
         ) {
-            weight_t prop_dist = dist[neighbors[i].v] + neighbors[i].w;
-            new_dist = min(prop_dist, new_dist);
+	    nid_t v=neighbors[i].v;
+	    incoming_total+=score[v]/degrees[v];
         }
 
-        // Warp-level min.
-        new_dist = warp_min(new_dist);
-        if (warpid == 0) { block_dist[threadIdx.x / warpSize] = new_dist; }
+        // Warp-level sum.
+        weight_t new_score = warp_sum(incoming_total);
+        if (warpid == 0) { block_score[threadIdx.x / warpSize] = new_score; }
 
-        // Block level min (using warp min).
+        // Block level sum (using warp sum).
         __syncthreads();
         if (threadIdx.x / warpSize == 0) { // If first warp.
-            new_dist = block_dist[warpid];
+            new_score = block_score[warpid];
             // TODO: optimize this to only use the necssary number of shuffles.
-            new_dist = warp_min(new_dist);
+            new_score = base_score+kDamp*warp_sum(new_score);
         }
 
-        // Update distance if applicable.
-        if (threadIdx.x == 0 and new_dist != dist[nid]) {
-            dist[nid] = new_dist;
+        // Update scores if applicable.
+        if (threadIdx.x == 0 and abs(new_score-score[nid])>epsilon) {
+            score[nid] = new_score;
             local_updated++;
         }
     }
@@ -285,18 +322,18 @@ void epoch_sssp_pull_gpu_block_red(
  *****************************************************************************/
 
 /** Identifier for epoch kernels. */
-enum class SSSPGPU {
+enum class PRGPU {
     one_to_one, warp_red, block_red, undefined
 };
 
 /** List of kernels available (no good iterator for enum classes). */
-std::vector<SSSPGPU> sssp_gpu_kernels = {
-    SSSPGPU::one_to_one, SSSPGPU::warp_red, SSSPGPU::block_red
+std::vector<PRGPU> pr_gpu_kernels = {
+    PRGPU::one_to_one, PRGPU::warp_red, PRGPU::block_red
 };
 
-std::vector<SSSPGPU> get_kernels(UNUSED SSSPGPU unused) {
+std::vector<PRGPU> get_kernels(UNUSED PRGPU unused) {
     // Using hack to overload function by return type.
-    return sssp_gpu_kernels;
+    return pr_gpu_kernels;
 }
 
 /** 
@@ -306,12 +343,12 @@ std::vector<SSSPGPU> get_kernels(UNUSED SSSPGPU unused) {
  * Returns:
  *   kernel name.
  */
-std::string to_repr(SSSPGPU ker) {
+std::string to_repr(PRGPU ker) {
     switch (ker) {
-        case SSSPGPU::one_to_one: return "sssp_gpu_onetoone";
-        case SSSPGPU::warp_red:   return "sssp_gpu_warp_red";
-        case SSSPGPU::block_red:  return "sssp_gpu_block_red";
-        case SSSPGPU::undefined:  
+        case PRGPU::one_to_one: return "pr_gpu_onetoone";
+        case PRGPU::warp_red:   return "pr_gpu_warp_red";
+        case PRGPU::block_red:  return "pr_gpu_block_red";
+        case PRGPU::undefined:  
         default:                  return "";
     }
 }
@@ -323,13 +360,13 @@ std::string to_repr(SSSPGPU ker) {
  * Returns:
  *   kernel name.
  */
-std::string to_string(SSSPGPU ker) {
+std::string to_string(PRGPU ker) {
     switch (ker) {
-        case SSSPGPU::one_to_one: return "SSSP GPU one-to-one";
-        case SSSPGPU::warp_red:   return "SSSP GPU warp-red";
-        case SSSPGPU::block_red:  return "SSSP GPU block-red";
-        case SSSPGPU::undefined:  
-        default:                  return "undefined SSSP GPU kernel";
+        case PRGPU::one_to_one: return "PR GPU one-to-one";
+        case PRGPU::warp_red:   return "PR GPU warp-red";
+        case PRGPU::block_red:  return "PR GPU block-red";
+        case PRGPU::undefined:  
+        default:                  return "undefined PR GPU kernel";
     }
 }
 
@@ -340,17 +377,17 @@ std::string to_string(SSSPGPU ker) {
  * Returns:
  *   kernel function pointer.
  */
-sssp_gpu_epoch_func get_kernel(SSSPGPU ker) {
+pr_gpu_epoch_func get_kernel(PRGPU ker) {
     switch (ker) {
-        case SSSPGPU::one_to_one: return epoch_sssp_pull_gpu_one_to_one;
-        case SSSPGPU::warp_red:   return epoch_sssp_pull_gpu_warp_red;
-        case SSSPGPU::block_red:  return epoch_sssp_pull_gpu_block_red;
-        case SSSPGPU::undefined:  
+        case PRGPU::one_to_one: return epoch_pr_pull_gpu_one_to_one;
+        case PRGPU::warp_red:   return epoch_pr_pull_gpu_warp_red;
+        case PRGPU::block_red:  return epoch_pr_pull_gpu_block_red;
+        case PRGPU::undefined:  
         default:                  return nullptr;
     }
 }
 
-std::ostream &operator<<(std::ostream &os, SSSPGPU ker) {
+std::ostream &operator<<(std::ostream &os, PRGPU ker) {
     os << to_string(ker);
     return os;
 }
